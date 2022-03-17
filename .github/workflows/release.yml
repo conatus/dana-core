@@ -1,0 +1,38 @@
+name: Release
+
+on:
+  push:
+    branch:
+      - main
+    tags:
+      - v*
+
+jobs:
+  release:
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+
+    steps:
+      - name: Check out Git repository
+        uses: actions/checkout@v1
+
+      - name: Install Node.js, NPM and Yarn
+        uses: actions/setup-node@v1
+        with:
+          node-version: 16
+
+      - name: Install
+        run: yarn
+
+      - name: Build app
+        run: |
+          yarn vite build --config vite.electron.config.js
+          yarn vite build --config vite.renderer.config.js
+
+      - name: Release app
+        run: node scripts/release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
