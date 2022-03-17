@@ -1,15 +1,14 @@
 import isDev from 'electron-is-dev';
 import path from 'path';
+import { getFileUrl } from '../../lib/platform';
 
-/** Relative location of frontend bundle */
-const FRONTEND_BUILD_DIR = `../../frontend`;
+/** Relative location of app bundle root */
+const BUILD_ROOT = path.join(__dirname, '..', '..');
+
+/** Default frontend entrypoint (if not overriden through environment) */
 const DEFAULT_FRONTEND_SOURCE_URL = isDev
-  ? 'http://localhost:3000/src/frontend/index.html'
-  : `file://${path.join(
-      __dirname,
-      FRONTEND_BUILD_DIR,
-      'src/frontend/index.html'
-    )}`;
+  ? 'http://localhost:3000/desktop.html'
+  : getFileUrl(path.join(BUILD_ROOT, 'build/renderer/desktop.html'));
 
 /** Enable developer tools */
 export const SHOW_DEVTOOLS = process.env.SHOW_DEVTOOLS || isDev ? false : true;

@@ -1,11 +1,11 @@
 /* eslint-env node */
 
 import { chrome } from './.electron-vendors.cache.json';
-import { join } from 'path';
+import { join, resolve } from 'path';
 import { builtinModules } from 'module';
 import react from '@vitejs/plugin-react';
 
-const SRC_ROOT = join(__dirname, 'src');
+const SRC_ROOT = resolve('src');
 
 /**
  * @type {import('vite').UserConfig}
@@ -25,11 +25,11 @@ const config = {
   build: {
     sourcemap: true,
     target: `chrome${chrome}`,
-    outDir: 'build/renderer',
+    outDir: join(SRC_ROOT, '..', 'build', 'renderer'),
 
     assetsDir: '.',
     rollupOptions: {
-      input: 'src/desktop.html',
+      input: join(SRC_ROOT, 'desktop.html'),
       external: [...builtinModules.flatMap((p) => [p, `node:${p}`])]
     },
     emptyOutDir: true,

@@ -1,8 +1,8 @@
 import { node } from './.electron-vendors.cache.json';
-import { join } from 'path';
+import { join, resolve } from 'path';
 import { builtinModules } from 'module';
 
-const SRC_ROOT = join(__dirname, 'src');
+const SRC_ROOT = resolve('src');
 
 /**
  * @type {import('vite').UserConfig}
@@ -13,7 +13,7 @@ const config = {
   build: {
     sourcemap: 'inline',
     target: `node${node}`,
-    outDir: 'build/electron',
+    outDir: join('build', 'electron'),
     minify: process.env.MODE !== 'development',
     lib: {
       entry: join(SRC_ROOT, 'app', 'entry', 'main.ts'),

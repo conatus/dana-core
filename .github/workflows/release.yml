@@ -2,10 +2,8 @@ name: Release
 
 on:
   push:
-    branch:
+    branches:
       - main
-    tags:
-      - v*
 
 jobs:
   release:
@@ -13,7 +11,7 @@ jobs:
 
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [windows-latest, ubuntu-latest]
 
     steps:
       - name: Check out Git repository
@@ -24,13 +22,21 @@ jobs:
         with:
           node-version: 16
 
+      - name: Cache node_modules
+        id: yarn-cache
+        uses: actions/cache@v2
+        with:
+          path: '**/node_modules'
+          key: ${{ runner.os }}-modules-electron-${{ hashFiles('**/yarn.lock') }}
+
       - name: Install
+        if: steps.yarn-cache.outputs.cache-hit != 'true'
         run: yarn
 
       - name: Build app
         run: |
-          yarn vite build --config vite.electron.config.js
-          yarn vite build --config vite.renderer.config.js
+          yarn vite build --config vite.electron.js
+          yarn vite build --config vite.renderer.js
 
       - name: Release app
         run: node scripts/release

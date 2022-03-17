@@ -63,7 +63,7 @@ const setupMainPackageWatcher = ({ config: { server } }) => {
 
   return getWatcher({
     name: 'reload-app-on-main-package-change',
-    configFile: 'vite.electron.config.js',
+    configFile: 'vite.electron.js',
     writeBundle() {
       if (spawnProcess !== null) {
         spawnProcess.off('exit', process.exit);
@@ -147,7 +147,7 @@ function updateVendors() {
   updateVendors();
   const viteDevServer = await createServer({
     ...sharedConfig,
-    configFile: 'vite.renderer.config.js'
+    configFile: 'vite.renderer.js'
   });
 
   await viteDevServer.listen();
