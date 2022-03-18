@@ -28,6 +28,9 @@ jobs:
         if: steps.yarn-cache.outputs.cache-hit != 'true'
         run: yarn
 
+      - name: Build app
+        run: yarn build
+
       - name: Run tests
         run: yarn test
 

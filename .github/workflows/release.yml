@@ -33,10 +33,14 @@ jobs:
         if: steps.yarn-cache.outputs.cache-hit != 'true'
         run: yarn
 
+      - name: Run tests
+        run: yarn test
+
+      - name: Typecheck
+        run: yarn tsc --noemit
+
       - name: Build app
-        run: |
-          yarn vite build --config vite.electron.js
-          yarn vite build --config vite.renderer.js
+        run: yarn build
 
       - name: Release app
         run: node scripts/release

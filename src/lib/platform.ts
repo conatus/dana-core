@@ -1,9 +1,9 @@
 import path from 'path';
 
-export function getFileUrl(pathString: string) {
-  if (path.sep === '\\') {
-    return 'file:///' + path.resolve(pathString).replace('\\', '/');
+export function getFileUrl(pathString: string, pathModule = path) {
+  if (pathModule.sep === '\\') {
+    return 'file:///' + pathModule.resolve(pathString).replace(/\\/g, '/');
   }
 
-  return 'file://' + path.resolve(pathString);
+  return 'file://' + pathModule.resolve(pathString);
 }
