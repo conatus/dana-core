@@ -1,46 +1,112 @@
-import { app, ipcMain } from 'electron';
+import { app as electronApp, BrowserWindow, ipcMain, Menu } from 'electron';
+import path from 'path';
+import { createApp } from '../electron/app';
 import { SHOW_DEVTOOLS } from '../electron/config';
 import { getSystray } from '../electron/systray';
 import { createFrontendWindow } from '../electron/window';
-
-function showMainWindow() {
-  createFrontendWindow({ title: 'Hello' });
-}
+import { ArchivePackage } from '../package/archive-package';
 
 async function main() {
-  initDevtools();
-  initSystray();
+  let newArchiveWindow: BrowserWindow | undefined;
 
-  // Quit when all windows are closed.
-  app.on('window-all-closed', () => {
-    app.dock?.hide();
-  });
+  /** Setup the business logic of the app */
+  const app = await createApp();
 
   ipcMain.on('restart', () => {
-    app.relaunch();
-    app.exit();
+    electronApp.relaunch();
+    electronApp.exit();
   });
-}
 
-function initSystray() {
-  const systray = getSystray();
-  systray.on('click', showMainWindow);
+  initDevtools();
+  initSystray();
+  initWindows();
+  initArchive();
+  showLandingScreen();
 
-  app.dock?.hide();
-}
+  function initArchive() {
+    // When an archive document is opened, show its window.
+    app.archiveService.on('opened', ({ archive }) => {
+      showArchiveWindow(archive);
+    });
+  }
 
-function initDevtools() {
-  if (SHOW_DEVTOOLS) {
-    const {
-      default: installExtension,
-      REACT_DEVELOPER_TOOLS
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-    } = require('electron-devtools-installer');
+  function initWindows() {
+    // Move to 'background' mode when all windows are closed.
+    electronApp.on('window-all-closed', () => {
+      electronApp.dock?.hide();
+    });
 
-    installExtension([REACT_DEVELOPER_TOOLS])
-      .then((name: string) => console.log(`Added Extension:  ${name}`))
-      .catch((err: unknown) => console.log('An error occurred: ', err));
+    // Ensure windows are added to and removed from router when they are opened and closed.
+    electronApp.on('browser-window-created', (_, window) => {
+      app.router.addWindow(window.webContents);
+
+      window.on('close', () => {
+        app.router.removeWindow(window.webContents);
+      });
+    });
+  }
+
+  function showArchiveWindow(archive: ArchivePackage) {
+    const window = createFrontendWindow({
+      title: path.basename(archive.location, path.extname(archive.location)),
+      config: { documentId: archive.location }
+    });
+
+    app.router.addWindow(window.webContents, archive.location);
+
+    window.on('close', () => {
+      app.archiveService.closeArchive(archive.location);
+    });
+  }
+
+  function showLandingScreen() {
+    if (newArchiveWindow) {
+      newArchiveWindow.focus();
+      return;
+    }
+
+    const window = createFrontendWindow({ title: 'New Archive', config: {} });
+
+    window.on('close', () => {
+      app.router.removeWindow(window.webContents);
+      newArchiveWindow = undefined;
+    });
+
+    newArchiveWindow = window;
+  }
+
+  function initSystray() {
+    const systray = getSystray();
+    systray.on('click', showLandingScreen);
+
+    systray.setContextMenu(
+      Menu.buildFromTemplate([
+        {
+          label: 'Exit',
+          click: () => {
+            process.exit();
+          }
+        }
+      ])
+    );
+
+    electronApp.dock?.hide();
+  }
+
+  /** If we're running in dev mode, show the de */
+  function initDevtools() {
+    if (SHOW_DEVTOOLS) {
+      const {
+        default: installExtension,
+        REACT_DEVELOPER_TOOLS
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+      } = require('electron-devtools-installer');
+
+      installExtension([REACT_DEVELOPER_TOOLS])
+        .then((name: string) => console.log(`Added Extension:  ${name}`))
+        .catch((err: unknown) => console.log('An error occurred: ', err));
+    }
   }
 }
 
-app.whenReady().then(main);
+electronApp.whenReady().then(main);
