@@ -5,25 +5,25 @@ import { X } from 'react-bootstrap-icons';
 import { IconButton } from 'theme-ui';
 import { useFrontendConfig } from '../config';
 
-const TITLEBAR_HEIGHT = '36px';
+const TITLEBAR_HEIGHT = '32px';
 
+/**
+ * Window wrapper chrome. Suitable for rendering a frameless window in an electron app.
+ */
 export const Window: FC<HTMLAttributes<unknown>> = ({ children, ...props }) => {
   const { platform } = useFrontendConfig();
 
   return (
     <div
-      className="drag-region"
       sx={{
         display: 'flex',
         flexDirection: 'column',
-        width: '100%',
-        height: '100%',
+        width: '100vw',
+        height: '100vh',
 
         userSelect: 'none',
         WebkitAppRegion: 'drag',
-        '> *': {
-          WebkitAppRegion: 'no-drag'
-        },
+        '> *': { WebkitAppRegion: 'no-drag' },
 
         bg: 'background',
         transition: 'background-color 0.2s ease-in-out',
@@ -44,15 +44,17 @@ export const Window: FC<HTMLAttributes<unknown>> = ({ children, ...props }) => {
       }}
       {...props}
     >
+      {children}
+
       {/* Linux can't render window chrome in frameless mode, so do it here instead */}
       {platform === 'linuxish' && (
         <div
           sx={{
             height: TITLEBAR_HEIGHT,
             position: 'absolute',
-            display: 'flex',
-            flexDirection: 'row',
-            alignItems: 'center'
+            right: 0,
+            top: 0,
+            zIndex: 100
           }}
         >
           <IconButton onClick={() => window.close()}>
@@ -60,11 +62,28 @@ export const Window: FC<HTMLAttributes<unknown>> = ({ children, ...props }) => {
           </IconButton>
         </div>
       )}
-
-      {children}
     </div>
   );
 };
 
-/** Inset window content to ensure it isn't obscured by chrome  */
-export const WindowInset = () => <div sx={{ height: TITLEBAR_HEIGHT }} />;
+/** Inset window content to ensure it isn't obscured by window chrome on platforms where the chome is added on top  */
+export const WindowInset: FC<HTMLAttributes<unknown>> = (props) => (
+  <div
+    sx={{
+      height: TITLEBAR_HEIGHT,
+      WebkitAppRegion: 'drag',
+      '> *': { WebkitAppRegion: 'no-drag' }
+    }}
+    {...props}
+  />
+);
+
+export const WindowDragArea: FC<HTMLAttributes<unknown>> = (props) => (
+  <div
+    sx={{
+      WebkitAppRegion: 'drag',
+      '> *': { WebkitAppRegion: 'no-drag' }
+    }}
+    {...props}
+  />
+);

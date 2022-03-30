@@ -1,9 +1,13 @@
 import { EventEmitter } from 'eventemitter3';
 import { isEqual } from 'lodash';
-import { EventInterface, FrontendIpc, RpcInterface } from '../../common/ipc';
+import {
+  EventInterface,
+  FrontendIpc,
+  RpcInterface
+} from '../../common/ipc.interfaces';
 import { Resource } from '../../common/resource';
 import { required } from '../../common/util/assert';
-import { OkResult, Result } from '../../common/util/error';
+import { Result } from '../../common/util/error';
 
 interface MockedIpcMethod<Req = unknown, Res = unknown, Err = unknown> {
   type: RpcInterface<Req, Res, Err>;
@@ -17,6 +21,9 @@ type MockedResult<Req, Res, Err> = (
   paginationToken?: string
 ) => Promise<Result<Res, Err>>;
 
+/**
+ * Mock instance of FrontendIpc for tests.
+ */
 export class MockIpc implements FrontendIpc {
   private events = new EventEmitter();
   private rpcCalls: MockedIpcMethod[] = [];

@@ -8,9 +8,8 @@
       "program": "scripts/debug",
       "cwd": "${workspaceFolder}",
       "sourceMaps": true,
-      "autoAttachChildProcesses": true,
       "outFiles": [
-        "${workspaceFolder}/dist/electron/*.js",
+        "${workspaceFolder}/build/electron/*.cjs",
         "!**/node_modules/**"
       ],
       "timeout": 15000,
@@ -32,7 +31,7 @@
         "jest",
         "--runInBand",
         "--watchAll=false",
-        "--testTimeout=100000"
+        "--testTimeout=1000000"
       ]
     }
   ]

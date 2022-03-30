@@ -1,9 +1,13 @@
 import type { IpcRenderer } from 'electron';
-import { EventInterface, FrontendIpc, RpcInterface } from '../../common/ipc';
+import {
+  EventInterface,
+  FrontendIpc,
+  RpcInterface
+} from '../../common/ipc.interfaces';
 import { Result } from '../../common/util/error';
 
 /**
- * Electron frontend RPC bindings
+ * Binds an electron frontend to apis in the main process set up using `ElectronRouter`
  */
 export class ElectronRendererIpc implements FrontendIpc {
   constructor(private ipc: IpcRenderer) {}

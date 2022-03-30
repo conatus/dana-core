@@ -3,24 +3,35 @@
 import { useCallback } from 'react';
 import { FC } from 'react';
 import { Route, Routes } from 'react-router-dom';
-import { Box, Button, Flex, Text } from 'theme-ui';
-import { CreateArchive } from '../common/interfaces/archive.interfaces';
+import { Button, Flex } from 'theme-ui';
+import { OpenArchive } from '../common/interfaces/archive.interfaces';
 
 import { useRPC } from './ipc/ipc.hooks';
+import { ArchiveScreen } from './screens/archive.screen';
+import { CollectionScreen } from './screens/collection.screen';
+import { ArchiveIngestScreen } from './screens/ingest.screen';
 import { WindowInset } from './ui/window';
 
-export const ArchiveWindow: FC = () => (
+/**
+ * Root component for a window representing an archive
+ */
+export const ArchiveWindow: FC<{ title?: string }> = ({ title }) => (
   <Routes>
-    <Route path="/">
-      <Route path="initial" />
+    <Route path="/" element={<ArchiveScreen title={title} />}>
+      <Route index element={<></>} />
+      <Route path="ingest/:sessionId" element={<ArchiveIngestScreen />} />
+      <Route path="collection" element={<CollectionScreen />} />
     </Route>
   </Routes>
 );
 
+/**
+ * Root component for a window shown on first launch
+ */
 export const NewArchiveWindow: FC = () => {
   const rpc = useRPC();
   const newArchive = useCallback(async () => {
-    const res = await rpc(CreateArchive, {});
+    const res = await rpc(OpenArchive, {});
 
     if (res.status === 'ok') {
       window.close();

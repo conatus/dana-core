@@ -1,9 +1,22 @@
 import { Theme } from 'theme-ui';
+import * as polished from 'polished';
 
 const controlHover = {
   '&:hover': {
     opacity: 0.5
   }
+};
+
+const colors = {
+  dark: '#010000',
+  gray: '#D9D4D3',
+  gray1: '#EDE9E9',
+  gray2: '#F9F7F7',
+  green: '#60D39B',
+  muted: '#818B88',
+  brown: '#81683E',
+  charcoal: '#3C3746',
+  blue: '#28108A'
 };
 
 export const theme: Theme = {
@@ -13,36 +26,30 @@ export const theme: Theme = {
     useRootStyles: true,
     useBorderBox: true
   },
+  space: [0, 3, 5, 8, 13, 21, 34],
   colors: {
-    text: 'white',
-    border: 'black',
-    background: '#1E1E1E',
-    primary: '#429CFF',
-    secondary: '#414141',
-    highlight: '#0058D0',
+    ...colors,
+    text: 'black',
+    success: colors.green,
+    error: polished.setHue(0, colors.green),
+    border: colors.gray,
+    highlight: colors.charcoal,
+    highlightHint: polished.transparentize(0.8, colors.charcoal),
+    highlightContrast: 'white',
+    background: colors.gray2,
+    foreground: 'white',
+    primary: colors.blue,
+    primaryContrast: 'white',
+    secondary: '#81683E',
     accent: '#008FFF',
-    muted: '#2A2A2A',
-    gray: '#414141',
-    foreground: '#2C2C2C',
-    modes: {
-      dark: {
-        text: '#fff',
-        background: '#060606',
-        primary: '#3cf',
-        secondary: '#e0f',
-        muted: '#191919',
-        highlight: '#29112c',
-        gray: '#999',
-        accent: '#c0f'
-      }
-    }
+    muted: '#818B88'
   },
   borders: {
     primary: '2px solid var(--theme-ui-colors-border)',
     selected: '2px solid var(--theme-ui-colors-accent)'
   },
   radii: {
-    control: 0
+    control: 5
   },
   shadows: {
     vertical: '0px 2px 10px 2px rgba(0,0,0,0.1)',
@@ -78,6 +85,13 @@ export const theme: Theme = {
       fontWeight: 'display',
       letterSpacing: '-0.03em',
       mt: 3
+    },
+    section: {
+      textTransform: 'uppercase',
+      fontWeight: 700,
+      fontSize: 1,
+      color: 'muted',
+      letterSpacing: 1.05
     }
   },
   images: {
@@ -89,7 +103,10 @@ export const theme: Theme = {
   buttons: {
     primary: {
       ...controlHover,
-      color: 'text',
+      fontSize: 1,
+      p: 3,
+      px: 4,
+      color: 'primaryContrast',
       backgroundColor: 'primary',
       borderRadius: 'control'
     },

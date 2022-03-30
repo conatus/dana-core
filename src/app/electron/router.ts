@@ -4,13 +4,15 @@ import {
   RpcInterface,
   EventInterface,
   RequestType
-} from '../../common/ipc';
+} from '../../common/ipc.interfaces';
 import { required } from '../../common/util/assert';
 import { Result } from '../../common/util/error';
 import { ArchivePackage } from '../package/archive-package';
 import { ArchiveService } from '../package/archive.service';
 
-/**  */
+/**
+ * Utility class for managing the electron side of frontend <-> electron app bindings.
+ */
 export class ElectronRouter {
   private _windows: Array<{ archiveId?: string; window: WebContents }> = [];
   constructor(private ipc: IpcMain, private archiveService: ArchiveService) {}
@@ -21,12 +23,12 @@ export class ElectronRouter {
    * @param descriptor RPC method to route.
    * @param handler Function to handle calls to this method in the electorn app.
    */
-  bindRpc<Rpc extends RpcInterface<unknown, unknown, unknown>>(
+  bindRpc<Rpc extends RpcInterface>(
     descriptor: Rpc,
     handler: (
       request: RequestType<Rpc>,
-      archive?: ArchivePackage,
-      paginationToken?: string
+      paginationToken?: string,
+      archiveId?: string
     ) => Promise<Result<ResponseType<Rpc>>>
   ) {
     this.ipc.handle(
@@ -34,20 +36,16 @@ export class ElectronRouter {
       async (
         _,
         request: Request,
-        archiveId?: string,
-        paginationToken?: string
+        paginationToken?: string,
+        archiveId?: string
       ): Promise<Result> => {
         // The schema validators aren't strictly needed in the electron app, but we use them here anyway
-        // to ensure consistent behaviour with the Web UI.
+        // to ensure consistent behaviour with any future Web UI.
         const validatedRequest = descriptor.request.parse(request);
-
-        const archive = archiveId
-          ? this.archiveService.getArchive(archiveId)
-          : undefined;
 
         const response = await handler(
           validatedRequest,
-          archive,
+          archiveId,
           paginationToken
         );
 
@@ -69,6 +67,33 @@ export class ElectronRouter {
         };
       }
     );
+  }
+
+  /**
+   * Route calls to an RPC method to a handler function. Convenience variant that provides the archive instance for
+   * the window that initated the request.
+   *
+   * @param descriptor RPC method to route.
+   * @param handler Function to handle calls to this method in the electorn app.
+   */
+  bindArchiveRpc<Rpc extends RpcInterface>(
+    descriptor: Rpc,
+    handler: (
+      archive: ArchivePackage,
+      request: RequestType<Rpc>,
+      paginationToken?: string
+    ) => Promise<Result<ResponseType<Rpc>>>
+  ) {
+    this.bindRpc(descriptor, (request, paginationToken, archiveIdParam) => {
+      const archiveId = required(archiveIdParam, 'Expected archive id');
+      const archive = required(
+        this.archiveService.getArchive(archiveId),
+        'Archive is not open',
+        archiveId
+      );
+
+      return handler(archive, request, paginationToken);
+    });
   }
 
   /**
@@ -122,5 +147,22 @@ export class ElectronRouter {
     if (index >= 0) {
       this._windows.splice(index, 1);
     }
+  }
+
+  /**
+   * Return the window registered for the archive.
+   *
+   * @param archiveId id of the archive to return a window fore.
+   * @returns The window associated with `archiveId` or else undefined.
+   */
+  getArchiveWindow(archiveId: string) {
+    const existing = this._windows.find(
+      (record) => record.archiveId === archiveId
+    );
+    return existing?.window;
+  }
+
+  get hasArchiveWindows() {
+    return this._windows.some((w) => !!w.archiveId);
   }
 }

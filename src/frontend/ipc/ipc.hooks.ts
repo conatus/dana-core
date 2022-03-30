@@ -1,4 +1,4 @@
-import { omit } from 'lodash';
+import EventEmitter from 'eventemitter3';
 import {
   createContext,
   useCallback,
@@ -8,10 +8,15 @@ import {
   useRef,
   useState
 } from 'react';
-import { EventInterface, FrontendIpc, RpcInterface } from '../../common/ipc';
+import {
+  EventInterface,
+  FrontendIpc,
+  RpcInterface
+} from '../../common/ipc.interfaces';
 import { ChangeEvent, Resource, ResourceList } from '../../common/resource';
 import { required } from '../../common/util/assert';
-import { Result } from '../../common/util/error';
+import { ok, Result } from '../../common/util/error';
+import { Scheduler } from '../../common/util/scheduler';
 
 export const IpcContext = createContext<IpcContext | undefined>(undefined);
 
@@ -87,7 +92,7 @@ export function useRPC() {
  * @returns Result object containing the latest value of the resource, or undefined if it the call has not yet resolved.
  */
 export function useGet<T extends Resource, Err>(
-  resource: RpcInterface<Resource, T>,
+  resource: RpcInterface<Resource, T, Err>,
   id: string
 ): Result<T, Err> | undefined {
   const rpc = useRPC();
@@ -126,104 +131,187 @@ export function useList<T extends Resource, Q, Err>(
   resource: RpcInterface<Q, ResourceList<T>, Err>,
   query: () => Q,
   deps: unknown[]
-): ListCursor<T, Err> {
+): ListCursor<T, Err> | undefined {
+  type DataState = Omit<ListCursor<T, Err>, 'fetchMore' | 'active' | 'events'>;
+
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const q = useMemo(query, deps);
   const rpc = useRPC();
 
-  // Track page results
-  // TODO: use an LRU cache for this maybe?
-  const [data, setData] = useState<Record<string | symbol, ListCursorPage<T>>>(
-    {}
-  );
-
   // If the query fails, return the error to the caller
-  const [error, setError] = useState<Err>();
+  const [state, setState] = useState<DataState>();
 
-  // Track the total count
-  const [totalCount, setTotalCount] = useState<number>();
+  const [active, setActive] = useState(false);
 
-  // Track the current visible page so we know what to re-fetch when the query invalidates
-  const currentPage = useRef<string>();
+  const scheduler = useMemo(() => new Scheduler(), []);
+  const events = useMemo(() => new EventEmitter<ListCursorEvents>(), []);
 
-  const fetchPage = useCallback(
-    async (page?: string) => {
-      const res = await rpc(resource, q, page);
-      if (res.status === 'error') {
-        setError(res.error);
-        return;
-      }
+  const paginationToken = useRef<{ next?: string }>();
+  const firstLoad = useRef(true);
 
-      setTotalCount(res.value.total);
+  // Triggered on first load, data change and when the query changes
+  const refetchAll = useCallback(
+    () =>
+      scheduler.run(async () => {
+        if (!firstLoad.current) {
+          events.emit('change');
+        }
 
-      return omit(res.value, 'total');
-    },
-    [q, resource, rpc]
+        firstLoad.current = false;
+        setActive(true);
+
+        try {
+          const data = await rpc(resource, q);
+          if (data.status === 'error') {
+            return setState({
+              items: [],
+              error: data.error,
+              totalCount: 0
+            });
+          }
+
+          paginationToken.current = data.value;
+
+          setState({
+            items: data.value.items,
+            totalCount: data.value.total
+          });
+        } finally {
+          setActive(false);
+        }
+      }),
+    [events, q, resource, rpc, scheduler]
   );
 
-  // Invalidate and refetch on change
-  useEvent(ChangeEvent, ({ type }) => {
+  // Refetch all when the query changes or on first load
+  useEffect(() => {
+    refetchAll();
+  }, [refetchAll]);
+
+  // Invalidate and refetch when the backend emits a change event
+  useEvent(ChangeEvent, async ({ type }) => {
     // Easiest invalidation strategy is to do it whenever the referenced resource changes.
     //
-    // This means pushing the responsibility for firing a change event onto the backend if there are queries that
+    // This means pushing the responsibility for firing a change event onto the backend if there are queries
     // that may be invalidated by edits to other types of objects in the database.
-    if (type !== resource.id) {
-      return;
+    if (type === resource.id) {
+      refetchAll();
+      events.emit('change');
     }
-
-    fetchPage(currentPage.current).then((pageValue) => {
-      if (pageValue) {
-        setData({
-          [currentPage.current ?? DEFAULT_PAGE]: pageValue,
-          [pageValue.page]: pageValue
-        });
-      }
-    });
   });
 
   return useMemo(
-    () => ({
-      totalCount,
-      error,
-      setCurrentPage: (page) => {
-        currentPage.current = page;
-      },
-      getPage: (page) => {
-        const hit = data[page ?? DEFAULT_PAGE];
-        if (hit) {
-          return hit;
-        }
+    () =>
+      state && {
+        ...state,
+        events,
+        active,
+        reset: refetchAll,
+        fetchMore: (start, end) =>
+          scheduler.run(async () => {
+            setActive(true);
+            const addedItems: T[] = [];
 
-        fetchPage(page).then((pageValue) => {
-          if (pageValue) {
-            setData((current) => ({
-              ...current,
-              [pageValue.page]: pageValue,
-              [page ?? DEFAULT_PAGE]: pageValue
-            }));
-          }
-        });
-      }
-    }),
-    [totalCount, error, data, fetchPage]
+            while (
+              addedItems.length < end - start &&
+              !(paginationToken.current && !paginationToken.current.next)
+            ) {
+              const res = await rpc(resource, q, paginationToken.current?.next);
+              if (res.status === 'error') {
+                return setState(
+                  (prev) =>
+                    prev && {
+                      ...prev,
+                      error: res.error
+                    }
+                );
+              }
+
+              addedItems.push(...res.value.items);
+              paginationToken.current = res.value;
+            }
+
+            setState(
+              (prev) =>
+                prev && {
+                  ...prev,
+                  items: [...(prev?.items ?? []), ...addedItems]
+                }
+            );
+
+            setActive(false);
+          })
+      },
+    [active, q, refetchAll, resource, rpc, events, scheduler, state]
   );
 }
 
-/** Represents an ongoing list query */
-export interface ListCursor<T = unknown, Err = unknown> {
-  /** Nonfatal error for the current query */
-  error?: Err;
+export function useListAll<T extends Resource, Q, Err>(
+  resource: RpcInterface<Q, ResourceList<T>, Err>,
+  query: () => Q,
+  deps: unknown[]
+): Result<T[]> | undefined {
+  const rpc = useRPC();
+  const { ipc } = useIpc();
 
-  /** Total count of the list */
-  totalCount?: number;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const q = useMemo(query, deps);
+  const [data, setData] = useState<Result<T[]>>();
 
-  /** Set the pages that need to be refetched first when the query is invalidated */
-  setCurrentPage: (page: string) => void;
+  useEffect(() => {
+    const fetchAll = async () => {
+      const items: T[] = [];
 
-  /** Return the current result for the specified page, fetching it if needed */
-  getPage: (page?: string) => ListCursorPage<T> | undefined;
+      let page;
+      do {
+        const res: Result<ResourceList<T>> = await rpc(resource, q, page);
+        if (res.status !== 'ok') {
+          return res;
+        }
+
+        items.push(...res.value.items);
+        page = res.value.next;
+      } while (page);
+
+      return ok(items);
+    };
+
+    fetchAll().then(setData);
+
+    return ipc.listen(ChangeEvent, (event) => {
+      if (event.type === resource.id) {
+        fetchAll().then(setData);
+      }
+    });
+  }, [ipc, q, resource, rpc]);
+
+  return data;
 }
 
-type ListCursorPage<T = unknown> = Omit<ResourceList<T>, 'total'>;
+/**
+ * Represents a paginated list query suitable for display in a virtualized list view.
+ **/
+export interface ListCursor<T extends Resource = Resource, Err = unknown> {
+  /** Error that ocurred while making the query */
+  error?: Err;
 
-const DEFAULT_PAGE = Symbol('DEFAULT_PAGE');
+  /** The total number of values represented by the query */
+  totalCount: number;
+
+  /** Events relating to the query */
+  events: EventEmitter<ListCursorEvents>;
+
+  /** All items fetched so far */
+  items: T[];
+
+  /** Extend the cursor's range over the query */
+  fetchMore: (start: number, end: number) => Promise<void>;
+
+  /** True if data is currently being fetched */
+  active: boolean;
+}
+
+interface ListCursorEvents {
+  /** Emitted when the query is invalidated and any downstream cache should be cleared. */
+  change: [];
+}

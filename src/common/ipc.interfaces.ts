@@ -43,7 +43,11 @@ export interface FrontendIpc {
 /**
  * Represent a backend RPC service called by the frontend.
  **/
-export interface RpcInterface<Request, Response, Error = never> {
+export interface RpcInterface<
+  Request = unknown,
+  Response = unknown,
+  Error = unknown
+> {
   /** Unique identifier for the rpc call */
   id: string;
 
