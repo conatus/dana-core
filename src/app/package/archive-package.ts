@@ -6,18 +6,19 @@ import {
   RequestContext
 } from '@mikro-orm/core';
 import { AutoPath } from '@mikro-orm/core/typings';
-import { SqlEntityManager, SqliteDriver } from '@mikro-orm/sqlite';
+import { SqlEntityManager } from '@mikro-orm/sqlite';
 import path from 'path';
 import { safeParse } from 'secure-json-parse';
 import { z } from 'zod';
 
 import { PaginatedResourceList, Resource } from '../../common/resource';
+import { required } from '../../common/util/assert';
 
 /**
  * Represents file and metadata storage for an archive.
  */
 export class ArchivePackage {
-  constructor(readonly location: string, private db: MikroORM<SqliteDriver>) {}
+  constructor(readonly location: string, private db: MikroORM) {}
 
   /**
    * Unique id for the archive.
@@ -43,20 +44,35 @@ export class ArchivePackage {
    * However, all database operations must happen within the context of at _least one_ of these blocks (or
    * useDbTransaction), otherwise an exception will be thrown.
    */
-  useDb<T>(cb: (db: SqlEntityManager<SqliteDriver>) => T | Promise<T>) {
-    return RequestContext.createAsync<T>(this.db.em, async () =>
-      cb(this.db.em)
-    );
+  useDb<T>(cb: (db: SqlEntityManager) => T | Promise<T>): Promise<T> {
+    return RequestContext.createAsync<T>(this.db.em, async () => {
+      const em = required(
+        RequestContext.getEntityManager() as SqlEntityManager,
+        'Expected requestContext'
+      );
+      const res = await cb(em);
+
+      // Ensure that any uncommitted changes from the unit of work are written to the db before we end.
+      // We could potentially optimize this by only flushing the outermost unit of work.
+      await em.flush();
+
+      return res;
+    });
   }
 
   /**
+   * TODO: Currently has same behaviour as useDb() - needs to detect nested transactions as sqlite doesn't support them.
+   * See: https://github.com/commonknowledge/dana-core/issues/19
+   *
    * Execute a block in the context of a database transaction. A unit of work will be set up for the transaction
    * if not already in the context of one.
    *
+   * If this is called within a database transaction, the parent transaction will be used.
+   *
    * See https://mikro-orm.io/docs/unit-of-work for more information about units of work.
    */
-  useDbTransaction<T>(cb: (db: SqlEntityManager<SqliteDriver>) => Promise<T>) {
-    return this.useDb((db) => db.transactional(cb));
+  useDbTransaction<T>(cb: (db: SqlEntityManager) => Promise<T>) {
+    return this.useDb<T>(cb);
   }
 
   /**

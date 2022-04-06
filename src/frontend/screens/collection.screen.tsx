@@ -1,38 +1,62 @@
 /** @jsxImportSource theme-ui */
 
-import { FC } from 'react';
-import { Asset, ListAssets } from '../../common/asset.interfaces';
-import { useList } from '../ipc/ipc.hooks';
+import { FC, useMemo } from 'react';
+import {
+  Asset,
+  GetRootCollection,
+  ListAssets,
+  SchemaProperty,
+  SchemaPropertyType
+} from '../../common/asset.interfaces';
+import { never } from '../../common/util/assert';
+import { useGet, useList } from '../ipc/ipc.hooks';
 import { TextCell } from '../ui/components/grid-cell.component';
 import { DataGrid, GridColumn } from '../ui/components/grid.component';
 
 /**
- * Screen for viewing assets.
+ * Screen for viewing the assets in a collection.
  */
 export const CollectionScreen: FC = () => {
   const data = useList(ListAssets, () => ({}), []);
+  const collection = useGet(GetRootCollection);
 
-  if (!data) {
+  const gridColumns = useMemo(() => {
+    if (collection?.status === 'ok') {
+      return getGridColumns(collection.value.schema);
+    }
+
+    return [];
+  }, [collection]);
+
+  if (!data || !collection || collection.status !== 'ok') {
     return null;
   }
 
   return (
     <DataGrid
       sx={{ flex: 1, width: '100%' }}
-      columns={GRID_COLUMNS}
+      columns={gridColumns}
       data={data}
     />
   );
 };
 
 /**
- * Placeholder column definitions for the imported assets data grid.
+ * Return grid cells for each property type defined in the schema.
+ *
+ * @param schema The schema for this collection.
+ * @returns An array of DataGrid columns for each property in the schma.
  */
-const GRID_COLUMNS: GridColumn<Asset>[] = [
-  {
-    id: 'id',
-    getData: (x) => x.id,
-    cell: TextCell,
-    label: 'Id'
-  }
-];
+const getGridColumns = (schema: SchemaProperty[]) =>
+  schema.map((property): GridColumn<Asset> => {
+    if (property.type === SchemaPropertyType.FREE_TEXT) {
+      return {
+        id: property.id,
+        cell: TextCell,
+        getData: (x) => x.metadata[property.id],
+        label: property.label
+      };
+    }
+
+    return never(property.type);
+  });

@@ -1,4 +1,3 @@
-import { EntityManager } from '@mikro-orm/sqlite';
 import { readdir, readFile } from 'fs/promises';
 import path from 'path';
 import { z } from 'zod';
@@ -23,6 +22,9 @@ import { AssetIngestService } from './asset-ingest.service';
 import { Dict } from '../../common/util/types';
 import { compact } from 'lodash';
 import { ObjectQuery } from '@mikro-orm/core';
+import { SqlEntityManager } from '@mikro-orm/sqlite';
+import { CollectionService } from '../asset/collection.service';
+import { SchemaProperty } from '../../common/asset.interfaces';
 
 /**
  * Encapsulates an import operation.
@@ -44,7 +46,10 @@ export class AssetIngestOperation implements IngestSession {
   private _totalFiles?: number;
   private _filesRead?: number;
   private _active = false;
-  private log = new Logger({ name: 'AssetIngestOperation: ' + this.id });
+  private log = new Logger({
+    name: 'AssetIngestOperation',
+    instanceName: this.id
+  });
 
   /** Supported file extensions for metadata sheets */
   private static SPREADSHEET_TYPES = ['.xlsx', '.csv', '.xls', '.ods'];
@@ -53,7 +58,8 @@ export class AssetIngestOperation implements IngestSession {
     readonly archive: ArchivePackage,
     readonly session: ImportSessionEntity,
     private ingestService: AssetIngestService,
-    private mediaService: MediaFileService
+    private mediaService: MediaFileService,
+    private collectionService: CollectionService
   ) {}
 
   /**
@@ -68,6 +74,13 @@ export class AssetIngestOperation implements IngestSession {
    **/
   get title() {
     return path.basename(this.session.basePath);
+  }
+
+  /**
+   * False if there are validation errors, otherwise true
+   **/
+  get valid() {
+    return this.session.valid;
   }
 
   /**
@@ -262,9 +275,18 @@ export class AssetIngestOperation implements IngestSession {
    * @param locator Unique string representing the location (path, path + line number, etc) this item was imported from
    */
   async readMetadataObject(metadata: Dict, files: string[], locator: string) {
+    const collection = await this.collectionService.getRootCollection(
+      this.archive
+    );
+    const convertToSchema = this.getMetadataConverter(collection.schema);
+    metadata = convertToSchema(metadata);
+
     await this.archive.useDbTransaction(async (db) => {
       const assetsRepository = db.getRepository(AssetImportEntity);
       const fileRepository = db.getRepository(FileImport);
+      const collection = await this.collectionService.getRootCollection(
+        this.archive
+      );
 
       const exists = !!(await assetsRepository.count({
         path: locator,
@@ -274,15 +296,28 @@ export class AssetIngestOperation implements IngestSession {
         return;
       }
 
+      const [validationErrors] =
+        await this.collectionService.validateItemsForCollection(
+          this.archive,
+          collection.id,
+          [{ id: locator, metadata }]
+        );
+
+      if (!validationErrors.success) {
+        this.session.valid = false;
+        db.persist(this.session);
+      }
+
       const asset = assetsRepository.create({
         metadata,
         path: locator,
         session: this.session,
-        phase: IngestPhase.READ_FILES
+        phase: IngestPhase.READ_FILES,
+        validationErrors: validationErrors.errors
       });
-      assetsRepository.persist(asset);
+      db.persist(asset);
 
-      assetsRepository.persist(
+      db.persist(
         files.map((file) =>
           fileRepository.create({
             asset,
@@ -296,6 +331,30 @@ export class AssetIngestOperation implements IngestSession {
     });
 
     this.emitStatus();
+  }
+
+  /**
+   * Return a function that transforms imported metadata keys from their the human-readable label to the metadata
+   * property id.
+   *
+   * This is a distinct step from metadata validation – since metadata values are not stored by their human-readable id,
+   * we need to transform imported metadata into the schema format before we validate it.
+   *
+   * @param schema The collection schema we are importing into.
+   * @returns A function from import format metadata to storage format metadata.
+   */
+  getMetadataConverter(schema: SchemaProperty[]) {
+    const byLabel = Object.fromEntries(
+      schema.map((item) => [item.label, item.id])
+    );
+
+    return (metadata: Dict) => {
+      const entries = Object.entries(metadata).flatMap(([label, val]) => {
+        const id = byLabel[label];
+        return id ? [[id, val]] : [];
+      });
+      return Object.fromEntries(entries);
+    };
   }
 
   /**
@@ -398,7 +457,10 @@ export class AssetIngestOperation implements IngestSession {
    * @param db Database entity manager to use for running the query
    * @returns QueryBuilder of `FileImport` entities representing all files imported by this session
    */
-  queryImportedFiles(db: EntityManager, where: ObjectQuery<FileImport> = {}) {
+  queryImportedFiles(
+    db: SqlEntityManager,
+    where: ObjectQuery<FileImport> = {}
+  ) {
     return db
       .createQueryBuilder(FileImport)
       .join('asset', 'asset')

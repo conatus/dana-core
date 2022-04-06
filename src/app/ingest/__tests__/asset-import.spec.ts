@@ -1,10 +1,15 @@
 import { compact } from 'lodash';
 import path from 'path';
+import {
+  SchemaProperty,
+  SchemaPropertyType
+} from '../../../common/asset.interfaces';
 
 import { IngestPhase } from '../../../common/ingest.interfaces';
 import { collectEvents, waitUntilEvent } from '../../../test/event';
 import { getTempfiles, getTempPackage } from '../../../test/tempfile';
 import { AssetsChangedEvent, AssetService } from '../../asset/asset.service';
+import { CollectionService } from '../../asset/collection.service';
 import { MediaFile } from '../../media/media-file.entity';
 import { MediaFileService } from '../../media/media-file.service';
 import {
@@ -20,6 +25,15 @@ import {
 describe('AssetImportOperation', () => {
   test('imports assets', async () => {
     const fixture = await setup();
+    await fixture.givenACollectionMetadataSchema([
+      {
+        type: SchemaPropertyType.FREE_TEXT,
+        id: 'internalPropertyId',
+        label: 'property',
+        required: true
+      }
+    ]);
+
     const sessionRun =
       await fixture.givenThatAnImportSessionHasRunSuccessfuly();
 
@@ -32,10 +46,35 @@ describe('AssetImportOperation', () => {
       items.map((x) => x.files.loadItems({ populate: ['media'] }))
     ).then((x) => x.flat());
 
+    expect(session.valid).toBeTruthy();
     expect(session.phase).toBe(IngestPhase.COMPLETED);
     expect(items).toHaveLength(2);
     expect(items.every((x) => x.phase === IngestPhase.COMPLETED)).toBeTruthy();
+    expect(items.every((x) => !x.validationErrors)).toBeTruthy();
     expect(compact(files.map((file) => file.media))).toHaveLength(2);
+  });
+
+  test('validates assets while importing', async () => {
+    const fixture = await setup();
+    await fixture.givenACollectionMetadataSchema([
+      {
+        type: SchemaPropertyType.FREE_TEXT,
+        id: 'missingProperty',
+        label: 'not there',
+        required: true
+      }
+    ]);
+
+    const session = await fixture.givenThatAnImportSessionHasRunSuccessfuly();
+
+    const { items } = await fixture.importService.listSessionAssets(
+      fixture.archive,
+      session.id
+    );
+
+    expect(session.valid).toBeFalsy();
+    expect(items).toHaveLength(2);
+    expect(items.every((x) => !!x.validationErrors)).toBeTruthy();
   });
 
   test('dispatches status events while importing', async () => {
@@ -180,6 +219,15 @@ describe('AssetImportOperation', () => {
 
   test('comitting a session creates assets and notifies the changes to assets', async () => {
     const fixture = await setup();
+    await fixture.givenACollectionMetadataSchema([
+      {
+        label: 'property',
+        id: 'p',
+        type: SchemaPropertyType.FREE_TEXT,
+        required: true
+      }
+    ]);
+
     const session = await fixture.givenThatAnImportSessionHasRunSuccessfuly();
 
     const assetEvents = collectEvents<AssetsChangedEvent>(
@@ -193,6 +241,12 @@ describe('AssetImportOperation', () => {
     // Creates the asssets and associates them with files
     expect(assets.total).toBe(2);
     expect(assets.items.map((item) => item.media)).toHaveLength(2);
+    expect(assets.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ metadata: { p: 'value1' } }),
+        expect.objectContaining({ metadata: { p: 'value2' } })
+      ])
+    );
 
     // Emits change events for each created assets
     expect(assetEvents.flatMap((event) => event.created)).toHaveLength(2);
@@ -203,14 +257,28 @@ const setup = async () => {
   const temp = await getTempfiles();
   const archive = await getTempPackage(temp());
   const mediaService = new MediaFileService();
-  const assetService = new AssetService();
-  const importService = new AssetIngestService(mediaService, assetService);
+  const collectionService = new CollectionService();
+  const assetService = new AssetService(collectionService);
+  const importService = new AssetIngestService(
+    mediaService,
+    assetService,
+    collectionService
+  );
 
   return {
     archive,
     mediaService,
     importService,
     assetService,
+    collectionService,
+    givenACollectionMetadataSchema: async (schema: SchemaProperty[]) => {
+      const collection = await collectionService.getRootCollection(archive);
+      await collectionService.updateCollectionSchema(
+        archive,
+        collection.id,
+        schema
+      );
+    },
     statusEvents: <T>(fn: (event: ImportStateChanged) => T) => {
       return collectEvents(importService, 'status', fn);
     },

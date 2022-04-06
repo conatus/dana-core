@@ -1,9 +1,12 @@
 import { EventEmitter } from 'eventemitter3';
 import { Asset } from '../../common/asset.interfaces';
 import { ResourceList } from '../../common/resource';
+import { error, FetchError, ok } from '../../common/util/error';
+import { Dict } from '../../common/util/types';
 import { MediaFile } from '../media/media-file.entity';
 import { ArchivePackage } from '../package/archive-package';
 import { AssetEntity } from './asset.entity';
+import { CollectionService } from './collection.service';
 
 interface CreateAssetOpts {
   /** Metadata to associate with the asset. This must be valid according to the archive schema */
@@ -14,6 +17,10 @@ interface CreateAssetOpts {
 }
 
 export class AssetService extends EventEmitter<AssetEvents> {
+  constructor(private collectionService: CollectionService) {
+    super();
+  }
+
   /**
    * Persist an asset to the database, associate it with zero or more media files and index its metadata.
    *
@@ -27,31 +34,120 @@ export class AssetService extends EventEmitter<AssetEvents> {
    */
   async createAsset(
     archive: ArchivePackage,
+    collectionId: string,
     { metadata, media = [] }: CreateAssetOpts
   ) {
-    const res = await archive.useDb(async (db): Promise<Asset> => {
+    const res = await archive.useDb(async (db) => {
       const asset = db.create(AssetEntity, {
-        mediaFiles: media
+        mediaFiles: [],
+        collection: await this.collectionService.getRootCollection(archive),
+        metadata: {}
       });
+
+      const validationResult = await this.setMetadataAndMedia(
+        archive,
+        collectionId,
+        asset,
+        metadata,
+        media
+      );
+
+      if (validationResult.status === 'error') {
+        return validationResult;
+      }
 
       db.persist(asset);
 
-      return {
+      return ok<Asset>({
         id: asset.id,
-        metadata: metadata,
+        metadata: asset.metadata,
         media: media.map((m) => ({
           id: m.id,
           mimeType: m.mimeType,
           type: 'image'
         }))
-      };
+      });
     });
 
-    this.emit('change', {
-      created: [res.id]
-    });
+    if (res.status === 'ok') {
+      this.emit('change', {
+        created: [res.value.id]
+      });
+    }
 
     return res;
+  }
+
+  /**
+   * Given an existing asset in the archive, update its metadata and/or media files.
+   *
+   * Changes are validated against the collection schema and rejected if validation doesn't pass.
+   *
+   * @param archive The archive the asset is stored in.
+   * @param assetId Id of the asset to update
+   * @param param2 Media and metadata to update. Undefined values are left as-is.
+   * @returns A Result indicating the success of the operation.
+   */
+  async updateAsset(
+    archive: ArchivePackage,
+    assetId: string,
+    { metadata, media }: Partial<CreateAssetOpts>
+  ) {
+    return await archive.useDb(async (db) => {
+      const asset = await db.findOne(
+        AssetEntity,
+        { id: assetId },
+        { populate: ['collection'] }
+      );
+      if (!asset) {
+        return error(FetchError.DOES_NOT_EXIST);
+      }
+
+      const validationResult = await this.setMetadataAndMedia(
+        archive,
+        asset.collection.id,
+        asset,
+        metadata,
+        media
+      );
+
+      if (validationResult.status === 'error') {
+        return validationResult;
+      }
+
+      db.persist(asset);
+      return ok(asset);
+    });
+  }
+
+  async setMetadataAndMedia(
+    archive: ArchivePackage,
+    collectionId: string,
+    asset: AssetEntity,
+    metadata?: Dict,
+    media?: MediaFile[]
+  ) {
+    if (metadata) {
+      const [valid] = await this.collectionService.validateItemsForCollection(
+        archive,
+        collectionId,
+        [{ id: 'asset', metadata }]
+      );
+
+      if (!valid.success) {
+        return error(valid.errors);
+      }
+
+      if (valid.metadata) {
+        asset.metadata = valid.metadata;
+      }
+    }
+
+    if (media) {
+      asset.mediaFiles.set(media);
+    }
+
+    return ok();
   }
 
   /**
@@ -83,7 +179,7 @@ export class AssetService extends EventEmitter<AssetEvents> {
               type: 'image',
               mimeType: file.mimeType
             })),
-            metadata: {}
+            metadata: entity.metadata
           }))
         )
       };

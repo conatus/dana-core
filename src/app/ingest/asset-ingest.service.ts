@@ -4,7 +4,9 @@ import { compact } from 'lodash';
 import { IngestPhase, IngestedAsset } from '../../common/ingest.interfaces';
 import { ResourceList } from '../../common/resource';
 import { DefaultMap } from '../../common/util/collection';
+import { ok } from '../../common/util/error';
 import { AssetService } from '../asset/asset.service';
+import { CollectionService } from '../asset/collection.service';
 import { MediaFileService } from '../media/media-file.service';
 import { ArchivePackage } from '../package/archive-package';
 import { AssetImportEntity, ImportSessionEntity } from './asset-import.entity';
@@ -13,7 +15,8 @@ import { AssetIngestOperation } from './asset-ingest.operation';
 export class AssetIngestService extends EventEmitter<Events> {
   constructor(
     private mediaService: MediaFileService,
-    private assetService: AssetService
+    private assetService: AssetService,
+    private collectionService: CollectionService
   ) {
     super();
   }
@@ -65,7 +68,8 @@ export class AssetIngestService extends EventEmitter<Events> {
       await archive.useDb((em) => {
         const session = em.create(ImportSessionEntity, {
           basePath,
-          phase: IngestPhase.READ_METADATA
+          phase: IngestPhase.READ_METADATA,
+          valid: true
         });
         em.persist(session);
         return session;
@@ -126,6 +130,7 @@ export class AssetIngestService extends EventEmitter<Events> {
       id: entity.id,
       metadata: entity.metadata,
       phase: entity.phase,
+      validationErrors: entity.validationErrors,
       media: compact(
         entity.files.getItems().map(
           ({ media }) =>
@@ -146,7 +151,9 @@ export class AssetIngestService extends EventEmitter<Events> {
    * @param sessionId Id of the session to return.
    */
   async commitSession(archive: ArchivePackage, sessionId: string) {
-    await archive.useDbTransaction(async (db) => {
+    const collection = await this.collectionService.getRootCollection(archive);
+
+    const res = await archive.useDbTransaction(async (db) => {
       const assets = await db.find(AssetImportEntity, { session: sessionId });
 
       for (const assetImport of assets) {
@@ -154,16 +161,28 @@ export class AssetIngestService extends EventEmitter<Events> {
           populate: ['media']
         });
 
-        this.assetService.createAsset(archive, {
-          metadata: assetImport.metadata,
-          media: compact(assetImport.files.getItems().map((item) => item.media))
-        });
+        const createResult = await this.assetService.createAsset(
+          archive,
+          collection.id,
+          {
+            metadata: assetImport.metadata,
+            media: compact(
+              assetImport.files.getItems().map((item) => item.media)
+            )
+          }
+        );
+
+        if (createResult.status !== 'ok') {
+          return createResult;
+        }
       }
 
       db.remove(db.getReference(ImportSessionEntity, sessionId));
+      return ok();
     });
 
     await this.closeSession(archive, sessionId);
+    return res;
   }
 
   /**
@@ -231,7 +250,13 @@ export class AssetIngestService extends EventEmitter<Events> {
       return session;
     }
 
-    session = new AssetIngestOperation(archive, state, this, this.mediaService);
+    session = new AssetIngestOperation(
+      archive,
+      state,
+      this,
+      this.mediaService,
+      this.collectionService
+    );
 
     activeSessions.sessions.set(session.id, session);
 

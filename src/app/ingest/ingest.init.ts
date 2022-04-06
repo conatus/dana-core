@@ -11,6 +11,7 @@ import {
 import { ChangeEvent } from '../../common/resource';
 import { error, ok, okIfExists } from '../../common/util/error';
 import { AssetService } from '../asset/asset.service';
+import { CollectionService } from '../asset/collection.service';
 import type { ElectronRouter } from '../electron/router';
 import { MediaFileService } from '../media/media-file.service';
 import { ArchiveService } from '../package/archive.service';
@@ -25,9 +26,14 @@ export async function initIngest(
   router: ElectronRouter,
   archiveService: ArchiveService,
   mediaService: MediaFileService,
-  assetService: AssetService
+  assetService: AssetService,
+  collectionService: CollectionService
 ) {
-  const assetIngest = new AssetIngestService(mediaService, assetService);
+  const assetIngest = new AssetIngestService(
+    mediaService,
+    assetService,
+    collectionService
+  );
 
   // When an archive opens, start managing its ingest operations
   archiveService.on('opened', ({ archive }) => {
@@ -87,8 +93,8 @@ export async function initIngest(
     return ok(sessions);
   });
 
-  router.bindArchiveRpc(GetIngestSession, async (archive, { sessionId }) => {
-    const session = assetIngest.getSession(archive, sessionId);
+  router.bindArchiveRpc(GetIngestSession, async (archive, { id }) => {
+    const session = assetIngest.getSession(archive, id);
     return okIfExists(session);
   });
 

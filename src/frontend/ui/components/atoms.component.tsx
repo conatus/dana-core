@@ -18,7 +18,7 @@ interface LoadingCellProps {
  * - Value between 0-1 for percent progress
  * - Value >= 1 for completion
  */
-export type ProgressValue = number | 'error' | undefined;
+export type ProgressValue = number | 'error' | 'warning' | undefined;
 
 /**
  * Represents the loading progress of an indivudal item.
@@ -35,6 +35,15 @@ export const ProgressIndicator: FC<LoadingCellProps> = ({
     return (
       <ExclamationTriangleFill
         color="var(--theme-ui-colors-error)"
+        size={size}
+      />
+    );
+  }
+
+  if (value === 'warning') {
+    return (
+      <ExclamationTriangleFill
+        color="var(--theme-ui-colors-warn)"
         size={size}
       />
     );
@@ -74,6 +83,9 @@ interface ToolbarButtonProps extends IconButtonProps {
 
   /** Toolbar label */
   label: string;
+
+  /** Link to route */
+  path?: string;
 }
 
 /**
@@ -83,20 +95,22 @@ export const ToolbarButton: FC<ToolbarButtonProps> = ({
   icon: Icon,
   label,
   ...props
-}) => (
-  <Button
-    sx={{
-      variant: 'icon',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      bg: 'transparent',
-      color: 'black',
-      outline: 'none'
-    }}
-    {...props}
-  >
-    <Icon size={32} sx={{ pb: 1 }} />
-    <span sx={{ fontSize: 0, fontWeight: 500 }}>{label}</span>
-  </Button>
-);
+}) => {
+  return (
+    <Button
+      sx={{
+        variant: 'icon',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        bg: 'transparent',
+        color: 'black',
+        outline: 'none'
+      }}
+      {...props}
+    >
+      <Icon size={32} sx={{ pb: 1 }} />
+      <span sx={{ fontSize: 0, fontWeight: 500 }}>{label}</span>
+    </Button>
+  );
+};
