@@ -1,6 +1,7 @@
 import { SchemaPropertyType } from '../../../common/asset.interfaces';
 import { requireSuccess } from '../../../test/result';
 import { getTempfiles, getTempPackage } from '../../../test/tempfile';
+import { MediaFileService } from '../../media/media-file.service';
 import { AssetService } from '../asset.service';
 import { CollectionService } from '../collection.service';
 
@@ -130,10 +131,12 @@ describe(CollectionService, () => {
 async function setup() {
   const tmp = await getTempfiles();
   const service = new CollectionService();
-  const assets = new AssetService(service);
+  const media = new MediaFileService();
+  const assets = new AssetService(service, media);
 
   return {
     archive: await getTempPackage(tmp()),
+    media,
     service,
     assets
   };

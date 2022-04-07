@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, ipcMain, protocol, session } from 'electron';
 import { uniqueId } from 'lodash';
 
 import { FrontendConfig } from '../../common/frontend-config';
@@ -12,10 +12,20 @@ interface CreateFrontendWindow {
 
   /** Config object passed to frontend */
   config: Omit<FrontendConfig, 'platform' | 'windowId'>;
+
+  /** Resolve `media:` url schemes to an absolute path */
+  resolveMedia?: MediaResolveFn;
 }
 
+/** Resolve `media:` url schemes to an absolute path */
+type MediaResolveFn = (uri: string) => string;
+
 /** Show a new frontend window */
-export function createFrontendWindow({ title, config }: CreateFrontendWindow) {
+export function createFrontendWindow({
+  title,
+  config,
+  resolveMedia
+}: CreateFrontendWindow) {
   const mergedConfig: FrontendConfig = {
     ...config,
     windowId: uniqueId(),
@@ -23,6 +33,7 @@ export function createFrontendWindow({ title, config }: CreateFrontendWindow) {
     title
   };
 
+  const partition = initUrlSchemePartition(resolveMedia);
   const frontendWindow = new BrowserWindow({
     title,
 
@@ -52,6 +63,7 @@ export function createFrontendWindow({ title, config }: CreateFrontendWindow) {
         // ...(isDev ? ['] : [])
       ],
       webSecurity: true,
+      partition,
       preload: getResourcePath('preload/browser-preload.js')
     }
   });
@@ -62,6 +74,28 @@ export function createFrontendWindow({ title, config }: CreateFrontendWindow) {
   app.dock?.show();
 
   return frontendWindow;
+}
+
+/**
+ * Grants the window access to custom url schemes to access media files over media: uris.
+ * See: https://www.electronjs.org/docs/latest/api/protocol#using-protocol-with-a-custom-partition-or-session
+ *
+ * This is needed because we can't safely allow the renderer process access to `file://` urls.
+ *
+ * @param mediaDir Directory to serve media from.
+ * @returns An electron partition id defining the privilages we're granting to the new window.
+ */
+function initUrlSchemePartition(resolveMedia?: MediaResolveFn) {
+  if (resolveMedia) {
+    const partition = uniqueId('partition:');
+    const ses = session.fromPartition(partition);
+
+    ses.protocol.registerFileProtocol('media', (request, cb) => {
+      cb(resolveMedia(request.url));
+    });
+
+    return partition;
+  }
 }
 
 /** Don't show the window immediately – wait for react to render first */
@@ -94,3 +128,13 @@ function showWindowAfterFirstRender(
 
   ipcMain.on('render-window', onWindowRendered);
 }
+
+/**
+ * Declare that our custom media: uri scheme is safe and not subject to the CSP.
+ * This must happen before the electron app is initialized, so we do it at module scope.
+ *
+ * See: https://www.electronjs.org/docs/latest/api/protocol#using-protocol-with-a-custom-partition-or-session
+ */
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'media', privileges: { bypassCSP: true } }
+]);

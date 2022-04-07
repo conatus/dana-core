@@ -168,3 +168,47 @@ export const BottomBar: FC<BottomBarProps> = ({
     {actions}
   </Flex>
 );
+
+/**
+ * Render a resizable horizontally split layout suitable for presenting a main 'list' area and a 'detail' area when
+ * an item is selected in the main area.
+ *
+ * This layout is sometimes refered to as a 'master-detail view'.
+ */
+export const PrimaryDetailLayout: FC<
+  Omit<BoxProps, 'ref'> & { detail?: ReactNode }
+> = ({ detail, children, ...props }) => {
+  return (
+    <ReflexContainer
+      sx={{
+        '&.reflex-container.vertical > .reflex-splitter': {
+          borderRight: '1px solid var(--theme-ui-colors-border)',
+          borderLeft: 'none',
+          width: '1px'
+        },
+        '> .reflex-element': {
+          overflow: 'hidden'
+        }
+      }}
+      windowResizeAware
+      orientation="vertical"
+      {...props}
+    >
+      <ReflexElement minSize={320}>{children}</ReflexElement>
+
+      {detail && <ReflexSplitter propagate={true} />}
+
+      {detail && (
+        <ReflexElement
+          sx={{ display: 'flex', flexDirection: 'column', height: '100vh' }}
+          flex={0.25}
+          minSize={100}
+        >
+          <Box sx={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
+            {detail}
+          </Box>
+        </ReflexElement>
+      )}
+    </ReflexContainer>
+  );
+};

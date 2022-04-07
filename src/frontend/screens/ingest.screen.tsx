@@ -21,6 +21,9 @@ import { useGet, useList, useRPC } from '../ipc/ipc.hooks';
 import { ProgressValue } from '../ui/components/atoms.component';
 import { ProgressCell, TextCell } from '../ui/components/grid-cell.component';
 import { DataGrid, GridColumn } from '../ui/components/grid.component';
+import { MediaDetail } from '../ui/components/media-detail.component';
+import { PrimaryDetailLayout } from '../ui/components/page-layouts.component';
+import { SelectionContext } from '../ui/hooks/selection.hooks';
 import { BottomBar } from '../ui/components/page-layouts.component';
 
 /**
@@ -33,6 +36,12 @@ export const ArchiveIngestScreen: FC = () => {
   const collection = useGet(GetRootCollection);
   const completeImport = useCompleteImport(sessionId);
   const cancelImport = useCancelImport(sessionId);
+  const selection = SelectionContext.useContainer();
+  const selectedAsset = useMemo(() => {
+    if (selection.current && assets?.items) {
+      return assets.items.find((x) => x.id === selection.current);
+    }
+  }, [assets, selection]);
 
   const gridColumns = useMemo(() => {
     if (collection?.status === 'ok') {
@@ -46,6 +55,10 @@ export const ArchiveIngestScreen: FC = () => {
     return null;
   }
 
+  const detailView = selectedAsset ? (
+    <MediaDetail asset={selectedAsset} sx={{ width: '100%', height: '100%' }} />
+  ) : undefined;
+
   const allowComplete =
     session.status === 'ok' &&
     session.value.valid &&
@@ -53,11 +66,16 @@ export const ArchiveIngestScreen: FC = () => {
 
   return (
     <>
-      <DataGrid
-        sx={{ flex: 1, width: '100%' }}
-        columns={gridColumns}
-        data={assets}
-      />
+      <PrimaryDetailLayout
+        sx={{ flex: 1, width: '100%', position: 'relative' }}
+        detail={detailView}
+      >
+        <DataGrid
+          sx={{ flex: 1, width: '100%', height: '100%' }}
+          columns={gridColumns}
+          data={assets}
+        />
+      </PrimaryDetailLayout>
 
       <BottomBar
         actions={

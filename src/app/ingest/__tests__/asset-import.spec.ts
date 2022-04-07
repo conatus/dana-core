@@ -23,6 +23,8 @@ import {
 } from '../asset-ingest.service';
 
 describe('AssetImportOperation', () => {
+  jest.setTimeout(15000);
+
   test('imports assets', async () => {
     const fixture = await setup();
     await fixture.givenACollectionMetadataSchema([
@@ -258,7 +260,7 @@ const setup = async () => {
   const archive = await getTempPackage(temp());
   const mediaService = new MediaFileService();
   const collectionService = new CollectionService();
-  const assetService = new AssetService(collectionService);
+  const assetService = new AssetService(collectionService, mediaService);
   const importService = new AssetIngestService(
     mediaService,
     assetService,

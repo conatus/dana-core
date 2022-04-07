@@ -18,8 +18,8 @@ async function main() {
 
   /** Setup the business logic of the app */
   const app = await initApp();
-  const assets = initAssets(app.router);
   const media = initMedia();
+  const assets = initAssets(app.router, media.fileService);
   await initIngest(
     app.router,
     app.archiveService,
@@ -85,7 +85,8 @@ async function main() {
   async function showArchiveWindow(archive: ArchivePackage) {
     const window = createFrontendWindow({
       title: path.basename(archive.location, path.extname(archive.location)),
-      config: { documentId: archive.id }
+      config: { documentId: archive.id },
+      resolveMedia: (uri) => media.fileService.resolveRenditionUri(archive, uri)
     });
 
     app.router.addWindow(window.webContents, archive.location);

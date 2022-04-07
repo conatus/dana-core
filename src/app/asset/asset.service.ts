@@ -4,6 +4,7 @@ import { ResourceList } from '../../common/resource';
 import { error, FetchError, ok } from '../../common/util/error';
 import { Dict } from '../../common/util/types';
 import { MediaFile } from '../media/media-file.entity';
+import { MediaFileService } from '../media/media-file.service';
 import { ArchivePackage } from '../package/archive-package';
 import { AssetEntity } from './asset.entity';
 import { CollectionService } from './collection.service';
@@ -16,8 +17,14 @@ interface CreateAssetOpts {
   media?: MediaFile[];
 }
 
+/**
+ * Manages creation, administration and retreival of assets.
+ */
 export class AssetService extends EventEmitter<AssetEvents> {
-  constructor(private collectionService: CollectionService) {
+  constructor(
+    private collectionService: CollectionService,
+    private mediaService: MediaFileService
+  ) {
     super();
   }
 
@@ -64,6 +71,7 @@ export class AssetService extends EventEmitter<AssetEvents> {
         media: media.map((m) => ({
           id: m.id,
           mimeType: m.mimeType,
+          rendition: this.mediaService.getRenditionUri(archive, m),
           type: 'image'
         }))
       });
@@ -177,6 +185,7 @@ export class AssetService extends EventEmitter<AssetEvents> {
             media: Array.from(entity.mediaFiles).map((file) => ({
               id: file.id,
               type: 'image',
+              rendition: this.mediaService.getRenditionUri(archive, file),
               mimeType: file.mimeType
             })),
             metadata: entity.metadata
