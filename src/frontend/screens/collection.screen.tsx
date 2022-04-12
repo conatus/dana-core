@@ -9,7 +9,7 @@ import {
   SchemaPropertyType
 } from '../../common/asset.interfaces';
 import { never } from '../../common/util/assert';
-import { useGet, useList } from '../ipc/ipc.hooks';
+import { iterateListCursor, useGet, useList } from '../ipc/ipc.hooks';
 import { TextCell } from '../ui/components/grid-cell.component';
 import { DataGrid, GridColumn } from '../ui/components/grid.component';
 import { MediaDetail } from '../ui/components/media-detail.component';
@@ -33,10 +33,12 @@ export const CollectionScreen: FC = () => {
   }, [collection]);
 
   const selectedAsset = useMemo(() => {
-    if (selection.current && assets?.items) {
-      return assets.items.find((x) => x.id === selection.current);
+    if (selection.current && assets) {
+      return Array.from(iterateListCursor(assets)).find(
+        (x) => x && x.id === selection.current
+      );
     }
-  }, [assets?.items, selection]);
+  }, [assets, selection]);
 
   if (!assets || !collection || collection.status !== 'ok') {
     return null;

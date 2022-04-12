@@ -17,7 +17,7 @@ import {
   CancelIngestSession
 } from '../../common/ingest.interfaces';
 import { never, required } from '../../common/util/assert';
-import { useGet, useList, useRPC } from '../ipc/ipc.hooks';
+import { iterateListCursor, useGet, useList, useRPC } from '../ipc/ipc.hooks';
 import { ProgressValue } from '../ui/components/atoms.component';
 import { ProgressCell, TextCell } from '../ui/components/grid-cell.component';
 import { DataGrid, GridColumn } from '../ui/components/grid.component';
@@ -38,8 +38,10 @@ export const ArchiveIngestScreen: FC = () => {
   const cancelImport = useCancelImport(sessionId);
   const selection = SelectionContext.useContainer();
   const selectedAsset = useMemo(() => {
-    if (selection.current && assets?.items) {
-      return assets.items.find((x) => x.id === selection.current);
+    if (selection.current && assets) {
+      return Array.from(iterateListCursor(assets)).find(
+        (x) => x && x.id === selection.current
+      );
     }
   }, [assets, selection]);
 
@@ -169,7 +171,7 @@ const getGridColumns = (schema: SchemaProperty[]) => {
         if (x.validationErrors) {
           return 'warning';
         }
-        if (x.phase === IngestPhase.READ_FILES) {
+        if (x.phase === IngestPhase.PROCESS_FILES) {
           return -1;
         }
         if (x.phase === IngestPhase.COMPLETED) {
@@ -178,8 +180,7 @@ const getGridColumns = (schema: SchemaProperty[]) => {
 
         return undefined;
       },
-      cell: ProgressCell,
-      width: 36
+      cell: ProgressCell
     },
     ...metadataColumns
   ];
