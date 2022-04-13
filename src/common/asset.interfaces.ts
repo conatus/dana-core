@@ -1,6 +1,6 @@
 import { v4 } from 'uuid';
 import { z } from 'zod';
-import { RpcInterface } from './ipc.interfaces';
+import { ErrorType, RequestType, RpcInterface } from './ipc.interfaces';
 import { Media } from './media.interfaces';
 import { ResourceList } from './resource';
 import { FetchError } from './util/error';
@@ -52,6 +52,7 @@ const BaseSchemaProperty = z.object({
 });
 
 export const ValidationError = z.record(z.array(z.string()));
+export type ValidationError = z.TypeOf<typeof ValidationError>;
 
 /**
  * Common interface for a schema property with no special configuration fields.
@@ -124,3 +125,22 @@ export const ListAssets = RpcInterface({
   response: ResourceList(Asset),
   error: z.nativeEnum(FetchError)
 });
+
+/**
+ * Update the metadata for an asset.
+ *
+ * Performs a full update – missing keys are treated as setting the metadata value to null.
+ */
+export const UpdateAssetMetadata = RpcInterface({
+  id: 'assets/update',
+  request: z.object({
+    assetId: z.string(),
+    payload: z.record(z.unknown())
+  }),
+  response: z.object({}),
+  error: z.nativeEnum(FetchError).or(ValidationError)
+});
+export type UpdateAssetMetadataRequest = RequestType<
+  typeof UpdateAssetMetadata
+>;
+export type UpdateAssetError = ErrorType<typeof UpdateAssetMetadata>;

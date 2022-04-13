@@ -1,8 +1,16 @@
 /** @jsxImportSource theme-ui */
 
-import { FC } from 'react';
+import { Children, cloneElement, FC, ReactElement } from 'react';
 import { Icon, Check, ExclamationTriangleFill } from 'react-bootstrap-icons';
-import { Button, Donut, IconButtonProps, Spinner } from 'theme-ui';
+import {
+  BoxProps,
+  Button,
+  Donut,
+  Flex,
+  IconButton,
+  IconButtonProps,
+  Spinner
+} from 'theme-ui';
 
 interface LoadingCellProps {
   /** Represents progress to display */
@@ -112,5 +120,87 @@ export const ToolbarButton: FC<ToolbarButtonProps> = ({
       <Icon size={32} sx={{ pb: 1 }} />
       <span sx={{ fontSize: 0, fontWeight: 500 }}>{label}</span>
     </Button>
+  );
+};
+
+interface TabsProps extends BoxProps {
+  children?: ReactElement<IconTab>[];
+
+  /** Label of the tab to display. If not provided, defaults to the first tab. */
+  currentTab: string | undefined;
+
+  /** If false, disable all the buttons except the active one. Defaults to true */
+  onTabChange: (x: string) => void;
+}
+
+/**
+ * A mini-router and Tab bar component suitable for for tab displays in contextual side panels.
+ *
+ * Displays the children of the active tab (identified by its `label` attribute) and sets its `active`
+ * property to true.
+ *
+ * The parent is responsible for controlling the state by passing in `currentTab` and handling `onTabChange()`
+ */
+export const Tabs: FC<TabsProps> = ({
+  children = [],
+  currentTab: tabId = children[0]?.props.label,
+  onTabChange,
+  ...props
+}) => {
+  return (
+    <>
+      <Flex sx={{ flexDirection: 'row', borderBottom: 'primary' }} {...props}>
+        {Children.map(children, (child: ReactElement<IconTab>) =>
+          cloneElement(child, {
+            active: child.props.label === tabId,
+            onClick: () => onTabChange(child.props.label)
+          })
+        )}
+      </Flex>
+
+      {children.find((child) => child.props.label === tabId)?.props.children}
+    </>
+  );
+};
+
+interface IconTab extends IconButtonProps {
+  /** Icon to render */
+  icon: Icon;
+
+  /** Accessibility / tooltip label */
+  label: string;
+
+  /** Render the tab button in active state if true */
+  active?: boolean;
+}
+
+/**
+ * A tab button suitable for use with `Tabs` that renders a small icon, along with an accessibility label and tooltip.
+ */
+export const IconTab: FC<IconTab> = ({
+  icon: Icon,
+  label,
+  active,
+  ...props
+}) => {
+  return (
+    <IconButton
+      aria-label={label}
+      aria-selected={active}
+      title={label}
+      sx={{
+        bg: active ? 'primary' : undefined,
+        borderRadius: 0
+      }}
+      {...props}
+    >
+      <Icon
+        color={
+          active
+            ? 'var(--theme-ui-colors-primaryContrast)'
+            : 'var(--theme-ui-colors-text)'
+        }
+      />
+    </IconButton>
   );
 };

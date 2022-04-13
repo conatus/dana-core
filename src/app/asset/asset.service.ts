@@ -37,7 +37,7 @@ export class AssetService extends EventEmitter<AssetEvents> {
    * This should fail if the asset's metadata is not valid according to the archive's schema.
    *
    * @param archive The archive to store the asset in.
-   * @param param1 Options for
+   * @param param1 Options for creating the asset.
    * @returns An `Asset` object representing the inserted asset.
    */
   async createAsset(
@@ -80,7 +80,8 @@ export class AssetService extends EventEmitter<AssetEvents> {
 
     if (res.status === 'ok') {
       this.emit('change', {
-        created: [res.value.id]
+        created: [res.value.id],
+        updated: []
       });
     }
 
@@ -89,6 +90,8 @@ export class AssetService extends EventEmitter<AssetEvents> {
 
   /**
    * Given an existing asset in the archive, update its metadata and/or media files.
+   *
+   * Both the metadata and media options _fully replace_ the current values.
    *
    * Changes are validated against the collection schema and rejected if validation doesn't pass.
    *
@@ -102,7 +105,7 @@ export class AssetService extends EventEmitter<AssetEvents> {
     assetId: string,
     { metadata, media }: Partial<CreateAssetOpts>
   ) {
-    return await archive.useDb(async (db) => {
+    const res = await archive.useDb(async (db) => {
       const asset = await db.findOne(
         AssetEntity,
         { id: assetId },
@@ -125,8 +128,14 @@ export class AssetService extends EventEmitter<AssetEvents> {
       }
 
       db.persist(asset);
-      return ok(asset);
+      return ok(this.entityToAsset(archive, asset));
     });
+
+    if (res.status === 'ok') {
+      this.emit('change', { updated: [res.value.id], created: [] });
+    }
+
+    return res;
   }
 
   async setMetadataAndMedia(
@@ -181,19 +190,25 @@ export class AssetService extends EventEmitter<AssetEvents> {
       return {
         ...entities,
         items: await Promise.all(
-          entities.items.map(async (entity) => ({
-            id: entity.id,
-            media: Array.from(entity.mediaFiles).map((file) => ({
-              id: file.id,
-              type: 'image',
-              rendition: this.mediaService.getRenditionUri(archive, file),
-              mimeType: file.mimeType
-            })),
-            metadata: entity.metadata
-          }))
+          entities.items.map(async (entity) =>
+            this.entityToAsset(archive, entity)
+          )
         )
       };
     });
+  }
+
+  private entityToAsset(archive: ArchivePackage, entity: AssetEntity): Asset {
+    return {
+      id: entity.id,
+      media: Array.from(entity.mediaFiles).map((file) => ({
+        id: file.id,
+        type: 'image',
+        rendition: this.mediaService.getRenditionUri(archive, file),
+        mimeType: file.mimeType
+      })),
+      metadata: entity.metadata
+    };
   }
 }
 
@@ -205,4 +220,7 @@ interface AssetEvents {
 export interface AssetsChangedEvent {
   /** Ids of newly created assets */
   created: string[];
+
+  /** Ids of updated assets */
+  updated: string[];
 }
