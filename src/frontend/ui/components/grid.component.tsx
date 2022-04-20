@@ -165,6 +165,8 @@ export function DataGrid<T extends Resource>({
             []
           );
 
+          const endPadding = width - (last(columnOffsets) ?? 0);
+
           return (
             <>
               <div
@@ -185,7 +187,8 @@ export function DataGrid<T extends Resource>({
                   <div
                     key={col.id}
                     sx={{
-                      width: columnWidths[i],
+                      width:
+                        columnWidths.length === 1 ? width : columnWidths[i],
                       position: 'absolute',
                       borderRight: '1px solid var(--theme-ui-colors-border)',
                       left: columnOffsets[i - 1] ?? 0,
@@ -213,14 +216,24 @@ export function DataGrid<T extends Resource>({
                         gridRef.current = grid;
                       }}
                       height={height - rowHeight}
-                      columnWidth={(i) => columnWidths[i]}
+                      columnWidth={(i) => {
+                        if (i >= columns.length) {
+                          return endPadding;
+                        }
+
+                        return columnWidths.length === 1
+                          ? width
+                          : columnWidths[i];
+                      }}
                       onScroll={({ scrollLeft }) => {
                         if (headerRef.current) {
                           headerRef.current.style.transform = `translateX(-${scrollLeft}px)`;
                         }
                       }}
                       rowCount={data.totalCount}
-                      columnCount={columns.length}
+                      columnCount={
+                        endPadding >= 0 ? columns.length + 1 : columns.length
+                      }
                       rowHeight={() => rowHeight}
                       itemData={dataVal}
                       outerRef={outerListRef}
@@ -279,7 +292,10 @@ export interface GridColumn<T extends Resource = Resource, Val = any> {
 }
 
 /** Presentation component for a datagrid */
-export type DataGridCell<Val = unknown> = FC<{ value: Val }> & {
+export type DataGridCell<Val = unknown> = FC<{
+  value: Val;
+  property: string;
+}> & {
   /**
    * Explicit size for the cell in pixels. If not provided, will be auto-sized by the view.
    *
@@ -315,13 +331,13 @@ function CellWrapper<T extends Resource>({
     }
   };
 
-  if (!colData) {
+  if (!colData || !column) {
     return <div sx={sx} style={style} />;
   }
 
   return (
     <div sx={sx} style={style} onClick={() => setSelection(colData.id)}>
-      <column.cell value={column.getData(colData)} />
+      <column.cell value={column.getData(colData)} property={column.id} />
     </div>
   );
 }

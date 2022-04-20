@@ -24,14 +24,8 @@ export type Asset = z.TypeOf<typeof Asset>;
  * Enum value for possible schema property types.
  */
 export enum SchemaPropertyType {
-  FREE_TEXT = 'FREE_TEXT'
-}
-
-/**
- * Error code when a request fails due to a schema validation error.
- */
-export enum SchemaValidationError {
-  VALIDATION_ERROR = 'VALIDATION_ERROR'
+  FREE_TEXT = 'FREE_TEXT',
+  CONTROLLED_DATABASE = 'CONTROLLED_DATABASE'
 }
 
 /**
@@ -51,8 +45,39 @@ const BaseSchemaProperty = z.object({
   type: z.nativeEnum(SchemaPropertyType)
 });
 
-export const ValidationError = z.record(z.array(z.string()));
-export type ValidationError = z.TypeOf<typeof ValidationError>;
+/**
+ * Error object for validation of a single record
+ */
+export const SingleValidationError = z.record(z.array(z.string()));
+export type SingleValidationError = z.TypeOf<typeof SingleValidationError>;
+
+/**
+ * Error object for validation of a multiple records
+ */
+export const AggregatedValidationError = z.record(
+  z.array(
+    z.object({
+      message: z.string(),
+      count: z.number()
+    })
+  )
+);
+export type AggregatedValidationError = z.TypeOf<
+  typeof AggregatedValidationError
+>;
+
+/**
+ * Error object for a rejected delete
+ */
+export const ReferentialIntegrityError = z.array(
+  z.object({
+    assetId: z.string(),
+    collectionId: z.string()
+  })
+);
+export type ReferentialIntegrityError = z.TypeOf<
+  typeof ReferentialIntegrityError
+>;
 
 /**
  * Common interface for a schema property with no special configuration fields.
@@ -64,10 +89,23 @@ export const ScalarSchemaProperty = z.object({
 });
 export type ScalarSchemaProperty = z.TypeOf<typeof ScalarSchemaProperty>;
 
+export const ControlledDatabaseSchemaProperty = z.object({
+  ...BaseSchemaProperty.shape,
+
+  type: z.literal(SchemaPropertyType.CONTROLLED_DATABASE),
+  databaseId: z.string()
+});
+export type ControlledDatabaseSchemaProperty = z.TypeOf<
+  typeof ControlledDatabaseSchemaProperty
+>;
+
 /**
  * All schema property interface types
  */
-export const SchemaProperty = ScalarSchemaProperty;
+export const SchemaProperty = z.union([
+  ScalarSchemaProperty,
+  ControlledDatabaseSchemaProperty
+]);
 export type SchemaProperty = z.TypeOf<typeof SchemaProperty>;
 
 /**
@@ -83,22 +121,87 @@ export const defaultSchemaProperty = (i: number): SchemaProperty => ({
   type: SchemaPropertyType.FREE_TEXT
 });
 
+export enum CollectionType {
+  ASSET_COLLECTION = 'ASSET_COLLECTION',
+  CONTROLLED_DATABASE = 'CONTROLLED_DATABASE'
+}
+
 /**
  * Common interface for a collection in the archive.
  */
 export const Collection = z.object({
   id: z.string(),
+  title: z.string(),
+  type: z.nativeEnum(CollectionType),
   schema: z.array(SchemaProperty)
 });
 export type Collection = z.TypeOf<typeof Collection>;
 
 /**
- * Return the archive's root collection.
+ * Return the archive's root asset collection.
  */
-export const GetRootCollection = RpcInterface({
-  id: 'collection/get',
+export const GetRootAssetsCollection = RpcInterface({
+  id: 'collection/assets',
   request: z.undefined(),
   response: Collection
+});
+
+/**
+ * Return the archive's root controlled database collection.
+ */
+export const GetRootDatabaseCollection = RpcInterface({
+  id: 'collection/databases',
+  request: z.undefined(),
+  response: Collection
+});
+
+/**
+ * Get a collection by id.
+ */
+export const GetCollection = RpcInterface({
+  id: 'collection',
+  request: z.object({
+    id: z.string()
+  }),
+  response: Collection,
+  error: z.nativeEnum(FetchError)
+});
+
+/**
+ * Return the subcollections of a collection.
+ */
+export const GetSubcollections = RpcInterface({
+  id: 'collection/subcollections',
+  request: z.object({
+    parent: z.string()
+  }),
+  response: ResourceList(Collection)
+});
+
+/**
+ * Return the subcollections of a collection.
+ */
+export const CreateCollection = RpcInterface({
+  id: 'collection/create',
+  request: z.object({
+    parent: z.string(),
+    title: z.string(),
+    schema: z.array(SchemaProperty)
+  }),
+  response: Collection
+});
+
+/**
+ * Updates a collection's properties.
+ */
+export const UpdateCollection = RpcInterface({
+  id: 'collection/update',
+  request: z.object({
+    id: z.string(),
+    title: z.string()
+  }),
+  response: Collection,
+  error: z.nativeEnum(FetchError)
 });
 
 /**
@@ -113,7 +216,7 @@ export const UpdateCollectionSchema = RpcInterface({
     value: z.array(SchemaProperty)
   }),
   response: z.object({}),
-  error: z.nativeEnum(FetchError).or(z.nativeEnum(SchemaValidationError))
+  error: z.nativeEnum(FetchError).or(AggregatedValidationError)
 });
 
 /**
@@ -121,7 +224,47 @@ export const UpdateCollectionSchema = RpcInterface({
  */
 export const ListAssets = RpcInterface({
   id: 'assets/list',
-  request: z.object({}),
+  request: z.object({
+    collectionId: z.string()
+  }),
+  response: ResourceList(Asset),
+  error: z.nativeEnum(FetchError)
+});
+
+/**
+ * Get an asset by id.
+ */
+export const GetAsset = RpcInterface({
+  id: 'assets/get',
+  request: z.object({
+    id: z.string()
+  }),
+  response: Asset,
+  error: z.nativeEnum(FetchError)
+});
+
+/**
+ * Create a new asset.
+ */
+export const CreateAsset = RpcInterface({
+  id: 'assets/create',
+  request: z.object({
+    collection: z.string(),
+    metadata: z.record(z.unknown())
+  }),
+  response: Asset,
+  error: z.nativeEnum(FetchError)
+});
+
+/**
+ * Create a new asset.
+ */
+export const SearchAsset = RpcInterface({
+  id: 'assets/search',
+  request: z.object({
+    collection: z.string(),
+    query: z.string()
+  }),
   response: ResourceList(Asset),
   error: z.nativeEnum(FetchError)
 });
@@ -138,7 +281,7 @@ export const UpdateAssetMetadata = RpcInterface({
     payload: z.record(z.unknown())
   }),
   response: z.object({}),
-  error: z.nativeEnum(FetchError).or(ValidationError)
+  error: z.nativeEnum(FetchError).or(SingleValidationError)
 });
 export type UpdateAssetMetadataRequest = RequestType<
   typeof UpdateAssetMetadata

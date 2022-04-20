@@ -1,35 +1,107 @@
 /** @jsxImportSource theme-ui */
 
-import { FC, useMemo } from 'react';
+import { FC, useCallback, useMemo, useState } from 'react';
 import {
   Asset,
-  GetRootCollection,
+  GetCollection,
   ListAssets,
   SchemaProperty,
   SchemaPropertyType
 } from '../../common/asset.interfaces';
-import { never } from '../../common/util/assert';
-import { iterateListCursor, useGet, useList } from '../ipc/ipc.hooks';
-import { TextCell } from '../ui/components/grid-cell.component';
+import { never, required } from '../../common/util/assert';
+import {
+  iterateListCursor,
+  ListCursor,
+  unwrapGetResult,
+  useGet,
+  useList
+} from '../ipc/ipc.hooks';
+import { ReferenceCell, TextCell } from '../ui/components/grid-cell.component';
 import { DataGrid, GridColumn } from '../ui/components/grid.component';
 import { AssetDetail } from '../ui/components/asset-detail.component';
-import { PrimaryDetailLayout } from '../ui/components/page-layouts.component';
+import {
+  BottomBar,
+  PrimaryDetailLayout
+} from '../ui/components/page-layouts.component';
 import { SelectionContext } from '../ui/hooks/selection.hooks';
+import { useNavigate, useParams } from 'react-router-dom';
+import { useContextMenu } from '../ui/hooks/menu.hooks';
+import { IconButton } from 'theme-ui';
+import { Gear, Plus } from 'react-bootstrap-icons';
 
 /**
  * Screen for viewing the assets in a collection.
  */
 export const CollectionScreen: FC = () => {
-  const assets = useList(ListAssets, () => ({}), []);
-  const collection = useGet(GetRootCollection);
+  const collectionId = required(
+    useParams().collectionId,
+    'Expected collectionId param'
+  );
+  const navigate = useNavigate();
+  const collection = unwrapGetResult(useGet(GetCollection, collectionId));
+  const fetchedAssets = useList(
+    ListAssets,
+    () => (collection ? { collectionId: collection.id } : 'skip'),
+    [collection]
+  );
   const selection = SelectionContext.useContainer();
+  const [pendingAsset, setPendingAsset] = useState<Asset>();
 
-  const gridColumns = useMemo(() => {
-    if (collection?.status === 'ok') {
-      return getGridColumns(collection.value.schema);
+  const assets = useMemo((): ListCursor<Asset> | undefined => {
+    if (!fetchedAssets) {
+      return;
     }
 
-    return [];
+    if (!pendingAsset) {
+      return fetchedAssets;
+    }
+
+    return {
+      ...fetchedAssets,
+      totalCount: fetchedAssets.totalCount + 1,
+      get: (i) => (i === 0 ? pendingAsset : fetchedAssets.get(i - 1)),
+      isLoaded: (i) => (i === 0 ? true : fetchedAssets.isLoaded(i - 1)),
+      fetchMore: (start, end) =>
+        fetchedAssets.fetchMore(Math.max(start - 1, 0), end - 1),
+      setVisibleRange: (start, end) =>
+        fetchedAssets.setVisibleRange(Math.max(start - 1, 0), end - 1)
+    };
+  }, [fetchedAssets, pendingAsset]);
+
+  const newAsset = useCallback(() => {
+    setPendingAsset({
+      id: '$pending',
+      media: [],
+      metadata: {}
+    });
+    selection.setSelection('$pending');
+  }, [selection]);
+
+  const onCancelCreateAsset = () => {
+    setPendingAsset(undefined);
+    selection.setSelection(undefined);
+  };
+
+  const onCreateAsset = (asset: Asset) => {
+    setPendingAsset(undefined);
+    selection.setSelection(asset.id);
+  };
+
+  const configMenu = useContextMenu({
+    on: 'click',
+    options: [
+      {
+        id: 'editSchema',
+        label: 'Edit Schema',
+        action: () => {
+          navigate(`/collection/${collectionId}/schema`);
+        }
+      }
+    ]
+  });
+
+  const gridColumns = useMemo(() => {
+    return collection ? getGridColumns(collection.schema) : [];
   }, [collection]);
 
   const selectedAsset = useMemo(() => {
@@ -40,15 +112,19 @@ export const CollectionScreen: FC = () => {
     }
   }, [assets, selection]);
 
-  if (!assets || !collection || collection.status !== 'ok') {
+  if (!assets || !collection) {
     return null;
   }
 
   const detailView = selectedAsset ? (
     <AssetDetail
       sx={{ width: '100%', height: '100%' }}
+      key={selectedAsset.id}
+      collection={collection}
       asset={selectedAsset}
-      schema={collection.value.schema}
+      action={selectedAsset.id === '$pending' ? 'create' : 'update'}
+      onCancelCreate={onCancelCreateAsset}
+      onCreate={onCreateAsset}
     />
   ) : undefined;
 
@@ -59,9 +135,22 @@ export const CollectionScreen: FC = () => {
         detail={detailView}
       >
         <DataGrid
-          sx={{ flex: 1, width: '100%', height: '100%' }}
+          sx={{ flex: 1, width: '100%' }}
           columns={gridColumns}
           data={assets}
+        />
+
+        <BottomBar
+          actions={
+            <>
+              <IconButton onClick={newAsset} aria-label="Add">
+                <Plus />
+              </IconButton>
+              <IconButton aria-label="Settings" {...configMenu.triggerProps}>
+                <Gear />
+              </IconButton>
+            </>
+          }
         />
       </PrimaryDetailLayout>
     </>
@@ -84,6 +173,14 @@ const getGridColumns = (schema: SchemaProperty[]) =>
         label: property.label
       };
     }
+    if (property.type === SchemaPropertyType.CONTROLLED_DATABASE) {
+      return {
+        id: property.id,
+        cell: ReferenceCell,
+        getData: (x) => x.metadata[property.id],
+        label: property.label
+      };
+    }
 
-    return never(property.type);
+    return never(property);
   });

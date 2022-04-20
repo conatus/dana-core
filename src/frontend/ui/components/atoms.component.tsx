@@ -1,16 +1,22 @@
 /** @jsxImportSource theme-ui */
 
+import { compact } from 'lodash';
 import { Children, cloneElement, FC, ReactElement } from 'react';
+import AsyncSelect, { AsyncProps } from 'react-select/async';
 import { Icon, Check, ExclamationTriangleFill } from 'react-bootstrap-icons';
 import {
+  Box,
   BoxProps,
   Button,
   Donut,
   Flex,
   IconButton,
   IconButtonProps,
-  Spinner
+  Spinner,
+  Text,
+  useThemeUI
 } from 'theme-ui';
+import { CSSObjectWithLabel, GroupBase } from 'react-select';
 
 interface LoadingCellProps {
   /** Represents progress to display */
@@ -124,7 +130,7 @@ export const ToolbarButton: FC<ToolbarButtonProps> = ({
 };
 
 interface TabsProps extends BoxProps {
-  children?: ReactElement<IconTab>[];
+  children?: (ReactElement<IconTabProps> | undefined | false)[];
 
   /** Label of the tab to display. If not provided, defaults to the first tab. */
   currentTab: string | undefined;
@@ -143,14 +149,21 @@ interface TabsProps extends BoxProps {
  */
 export const Tabs: FC<TabsProps> = ({
   children = [],
-  currentTab: tabId = children[0]?.props.label,
+  currentTab,
   onTabChange,
   ...props
 }) => {
+  const tabs = compact(children);
+  if (tabs.length <= 1) {
+    const tab = tabs[0]?.props.children;
+    return <>{tab}</>;
+  }
+
+  const tabId = currentTab ?? tabs[0]?.props.label;
   return (
     <>
       <Flex sx={{ flexDirection: 'row', borderBottom: 'primary' }} {...props}>
-        {Children.map(children, (child: ReactElement<IconTab>) =>
+        {Children.map(tabs, (child: ReactElement<IconTabProps>) =>
           cloneElement(child, {
             active: child.props.label === tabId,
             onClick: () => onTabChange(child.props.label)
@@ -158,12 +171,12 @@ export const Tabs: FC<TabsProps> = ({
         )}
       </Flex>
 
-      {children.find((child) => child.props.label === tabId)?.props.children}
+      {tabs.find((child) => child.props.label === tabId)?.props.children}
     </>
   );
 };
 
-interface IconTab extends IconButtonProps {
+interface IconTabProps extends IconButtonProps {
   /** Icon to render */
   icon: Icon;
 
@@ -177,7 +190,7 @@ interface IconTab extends IconButtonProps {
 /**
  * A tab button suitable for use with `Tabs` that renders a small icon, along with an accessibility label and tooltip.
  */
-export const IconTab: FC<IconTab> = ({
+export const IconTab: FC<IconTabProps> = ({
   icon: Icon,
   label,
   active,
@@ -204,3 +217,74 @@ export const IconTab: FC<IconTab> = ({
     </IconButton>
   );
 };
+
+interface ValidationErrorProps extends BoxProps {
+  /** List of validation errors to display */
+  errors: string[];
+}
+
+/**
+ * Displays a list of validation errors.
+ *
+ * Suitable for rendering underneath a form control.
+ */
+export const ValidationError: FC<ValidationErrorProps> = ({
+  errors,
+  ...props
+}) => (
+  <Flex sx={{ flexDirection: 'row', mt: 1 }} {...props}>
+    <ExclamationTriangleFill
+      sx={{ mr: 2, mt: 1 }}
+      color="var(--theme-ui-colors-error)"
+    />
+
+    <Box>
+      {errors.map((e, i) => (
+        <Text
+          as="p"
+          key={i}
+          color="error"
+          sx={{ fontSize: 1, fontWeight: 700 }}
+        >
+          {e}
+        </Text>
+      ))}
+    </Box>
+  </Flex>
+);
+
+/**
+ * react-select component with project styles applied
+ */
+
+export function RelationSelect<
+  Option = unknown,
+  IsMulti extends boolean = false,
+  Group extends GroupBase<Option> = GroupBase<Option>
+>(props: AsyncProps<Option, IsMulti, Group>) {
+  const { theme } = useThemeUI();
+  console.log(theme.forms);
+  return (
+    <AsyncSelect
+      styles={{
+        control: (provided) => ({
+          ...provided,
+          ...(theme.forms?.select as CSSObjectWithLabel),
+          padding: 0,
+          display: 'flex',
+          '&:hover': {
+            borderColor: String(theme.forms?.borderColor || 'none')
+          }
+        }),
+        input: (provided) => ({
+          ...provided,
+          fontSize: 'inherit'
+        })
+      }}
+      placeholder="None"
+      cacheOptions
+      defaultOptions
+      {...props}
+    />
+  );
+}

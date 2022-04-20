@@ -1,13 +1,23 @@
 /** @jsxImportSource theme-ui */
 
 import { ChangeEvent, FC, useCallback } from 'react';
-import { ExclamationTriangleFill } from 'react-bootstrap-icons';
-import { Box, BoxProps, Field, Flex, Label, Text } from 'theme-ui';
+import { Box, BoxProps, Field, Label, Text, Textarea } from 'theme-ui';
 import {
+  GetAsset,
+  GetCollection,
+  GetRootDatabaseCollection,
   SchemaProperty,
-  SchemaPropertyType
+  SchemaPropertyType,
+  SearchAsset
 } from '../../../common/asset.interfaces';
-import { never } from '../../../common/util/assert';
+import { assert, never } from '../../../common/util/assert';
+import {
+  SKIP_FETCH,
+  unwrapGetResult,
+  useGet,
+  useRPC
+} from '../../ipc/ipc.hooks';
+import { RelationSelect } from './atoms.component';
 
 export interface SchemaFormFieldProps<T = unknown>
   extends Omit<BoxProps, 'value' | 'onChange' | 'property'> {
@@ -37,7 +47,16 @@ export const SchemaField: FC<SchemaFormFieldProps> = ({ value, ...props }) => {
     return <FreeTextField {...props} value={stringVal} />;
   }
 
-  return never(props.property.type);
+  if (props.property.type === SchemaPropertyType.CONTROLLED_DATABASE) {
+    const stringVal =
+      typeof value === 'string' || typeof value === 'undefined'
+        ? value
+        : undefined;
+
+    return <DatabaseReferenceField {...props} value={stringVal} />;
+  }
+
+  return never(props.property);
 };
 
 /**
@@ -78,27 +97,69 @@ export const FreeTextField: FC<SchemaFormFieldProps<string>> = ({
   );
 };
 
-interface ValidationErrorProps extends BoxProps {
-  /** List of validation errors to display */
-  errors: string[];
-}
-
 /**
- * Displays a list of validation errors.
- *
- * Suitable for rendering underneath a form control.
+ * Render a control for displaying and editing properties with the CONTROLLED_DATABASE schema type.
  */
-export const SchemaError: FC<ValidationErrorProps> = ({ errors, ...props }) => (
-  <Flex sx={{ flexDirection: 'row', mt: 1 }} {...props}>
-    <ExclamationTriangleFill
-      sx={{ mr: 2, mt: 1 }}
-      color="var(--theme-ui-colors-error)"
-    />
+export const DatabaseReferenceField: FC<SchemaFormFieldProps<string>> = ({
+  property,
+  value,
+  onChange,
+  editing,
+  ...props
+}) => {
+  assert(
+    property.type === SchemaPropertyType.CONTROLLED_DATABASE,
+    'Expected controlled db property'
+  );
+  const rpc = useRPC();
+  const collection = unwrapGetResult(
+    useGet(GetCollection, property.databaseId)
+  );
+  const referencedValue = useGet(GetAsset, value ?? SKIP_FETCH);
+  const titleKey = collection?.schema[0]?.id;
 
-    {errors.map((e, i) => (
-      <Text key={i} color="error" sx={{ fontSize: 1, fontWeight: 700 }}>
-        {e}
+  const promiseOptions = async (inputValue: string) => {
+    const assets = await rpc(
+      SearchAsset,
+      { collection: property.databaseId, query: inputValue },
+      { offset: 0, limit: 25 }
+    );
+
+    assert(assets.status === 'ok', 'Failed to load');
+    return assets.value.items;
+  };
+
+  if (editing) {
+    return (
+      <Box {...props}>
+        <Label>{property.label}</Label>
+        <RelationSelect
+          loadOptions={promiseOptions}
+          getOptionLabel={(opt) =>
+            titleKey ? String(opt.metadata[titleKey]) : ''
+          }
+          getOptionValue={(opt) => opt.id}
+          onChange={(x) => onChange(x?.id ?? undefined)}
+        />
+      </Box>
+    );
+  }
+
+  if (referencedValue?.status !== 'ok' || !titleKey) {
+    return null;
+  }
+
+  return (
+    <Box {...props}>
+      <Label>{property.label}</Label>
+
+      <Text>
+        {referencedValue.value ? (
+          String(referencedValue.value.metadata[titleKey])
+        ) : (
+          <i>None</i>
+        )}
       </Text>
-    ))}
-  </Flex>
-);
+    </Box>
+  );
+};

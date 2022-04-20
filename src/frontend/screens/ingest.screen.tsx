@@ -4,7 +4,7 @@ import { FC, useCallback, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Button } from 'theme-ui';
 import {
-  GetRootCollection,
+  GetRootAssetsCollection,
   SchemaProperty,
   SchemaPropertyType
 } from '../../common/asset.interfaces';
@@ -19,7 +19,11 @@ import {
 import { never, required } from '../../common/util/assert';
 import { iterateListCursor, useGet, useList, useRPC } from '../ipc/ipc.hooks';
 import { ProgressValue } from '../ui/components/atoms.component';
-import { ProgressCell, TextCell } from '../ui/components/grid-cell.component';
+import {
+  ProgressCell,
+  ReferenceCell,
+  TextCell
+} from '../ui/components/grid-cell.component';
 import { DataGrid, GridColumn } from '../ui/components/grid.component';
 import { AssetDetail } from '../ui/components/asset-detail.component';
 import { PrimaryDetailLayout } from '../ui/components/page-layouts.component';
@@ -33,7 +37,7 @@ export const ArchiveIngestScreen: FC = () => {
   const sessionId = required(useParams().sessionId, 'Expected sessionId param');
   const assets = useList(ListIngestAssets, () => ({ sessionId }), [sessionId]);
   const session = useGet(GetIngestSession, sessionId);
-  const collection = useGet(GetRootCollection);
+  const collection = useGet(GetRootAssetsCollection);
   const completeImport = useCompleteImport(sessionId);
   const cancelImport = useCancelImport(sessionId);
   const selection = SelectionContext.useContainer();
@@ -57,13 +61,14 @@ export const ArchiveIngestScreen: FC = () => {
     return null;
   }
 
-  const detailView = selectedAsset ? (
-    <AssetDetail
-      asset={selectedAsset}
-      schema={collection.value.schema}
-      sx={{ width: '100%', height: '100%' }}
-    />
-  ) : undefined;
+  const detailView =
+    selectedAsset && collection.status === 'ok' ? (
+      <AssetDetail
+        asset={selectedAsset}
+        sx={{ width: '100%', height: '100%' }}
+        collection={collection.value}
+      />
+    ) : undefined;
 
   const allowComplete =
     session.status === 'ok' &&
@@ -161,8 +166,16 @@ const getGridColumns = (schema: SchemaProperty[]) => {
         label: property.label
       };
     }
+    if (property.type === SchemaPropertyType.CONTROLLED_DATABASE) {
+      return {
+        id: property.id,
+        cell: ReferenceCell,
+        getData: (x) => x.metadata[property.id],
+        label: property.label
+      };
+    }
 
-    return never(property.type);
+    return never(property);
   });
 
   return [

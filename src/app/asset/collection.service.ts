@@ -1,16 +1,26 @@
+import { EventEmitter } from 'eventemitter3';
+import { mapValues } from 'lodash';
 import { z } from 'zod';
 import {
-  SchemaProperty,
-  SchemaValidationError
+  AggregatedValidationError,
+  Collection,
+  CollectionType,
+  SchemaProperty
 } from '../../common/asset.interfaces';
+import { PageRange } from '../../common/ipc.interfaces';
+import { assert } from '../../common/util/assert';
+import { DefaultMap } from '../../common/util/collection';
 import { error, FetchError, ok } from '../../common/util/error';
 import { Dict } from '../../common/util/types';
 import { ArchivePackage } from '../package/archive-package';
-import { AssetCollectionEntity } from './asset.entity';
-import { SchemaPropertyValue } from './metadata.entity';
+import { AssetCollectionEntity, AssetEntity } from './asset.entity';
+import {
+  SchemaPropertyValue,
+  SchemaValidationContext
+} from './metadata.entity';
 
 /**
- * Manages collections of assets and associates them with a schema.
+ * Manages collections of records and associates them with a schema.
  *
  * Collections are intended to be structured hierarchically, with a collection potentially having multiple
  * sub-collections.
@@ -20,45 +30,157 @@ import { SchemaPropertyValue } from './metadata.entity';
  * The archive has a root collection, which may define a default schema.
  * All other collections must be descendents of this.
  */
-export class CollectionService {
+export class CollectionService extends EventEmitter<CollectionEvents> {
+  private static ROOT_ASSET_ID = '$root';
+  private static ROOT_DB_ID = '$databases';
+
   /**
-   * Return the root collection of the archive. Created if it does not yet exist.
-   *
-   * Currently this is the only way of accessing a collection, but we anticipate in future to support hierarchically
-   * aranged collections.
+   * Return the root asset collection of the archive. Created if it does not yet exist.
    *
    * @param archive Archive containing the collection.
-   * @returns The root collection for `archive`
+   * @returns The root asset collection for `archive`
    */
-  async getRootCollection(archive: ArchivePackage) {
+  async getRootAssetCollection(archive: ArchivePackage) {
     return archive.useDbTransaction(async (db) => {
-      let collection = await db.findOne(AssetCollectionEntity, '$root');
+      let collection = await db.findOne(
+        AssetCollectionEntity,
+        CollectionService.ROOT_ASSET_ID
+      );
 
       if (!collection) {
         collection = db.create(AssetCollectionEntity, {
-          id: '$root',
+          id: CollectionService.ROOT_ASSET_ID,
+          title: 'Assets',
           schema: []
         });
         db.persist(collection);
       }
 
-      return collection;
+      return this.toCollectionValue(archive, collection);
     });
   }
 
   /**
-   * Return the metadata schema for a collection.
+   * Return the root controlled databases collection of the archive. Created if it does not yet exist.
    *
-   * When we support multiple / nested collections, this should be able to inherit from parent collections.
-   *
-   * @param archive Archive containing the schema
-   * @param collectionId Id of the collection we want a schema for.
-   * @returns An object representing the collection schema.
+   * @param archive Archive containing the collection.
+   * @returns The root controlled database collection for `archive`
    */
-  async getCollectionSchema(archive: ArchivePackage, collectionId: string) {
-    const collection = await archive.get(AssetCollectionEntity, collectionId);
+  async getRootDatabaseCollection(archive: ArchivePackage) {
+    return archive.useDbTransaction(async (db) => {
+      let collection = await db.findOne(
+        AssetCollectionEntity,
+        CollectionService.ROOT_DB_ID
+      );
 
-    return collection?.schema;
+      if (!collection) {
+        collection = db.create(AssetCollectionEntity, {
+          id: CollectionService.ROOT_DB_ID,
+          title: 'Databases',
+          schema: []
+        });
+        db.persist(collection);
+      }
+
+      return this.toCollectionValue(archive, collection);
+    });
+  }
+
+  /**
+   * Get a collection by id.
+   *
+   * @param archive Archive containing the collection.
+   * @param collectionId ID of the collection.
+   * @returns The root controlled database collection for `archive`
+   */
+  async getCollection(archive: ArchivePackage, collectionId: string) {
+    return archive
+      .get(AssetCollectionEntity, collectionId)
+      .then((entity) => entity && this.toCollectionValue(archive, entity));
+  }
+
+  /**
+   * Return the root controlled databases collection of the archive. Created if it does not yet exist.
+   *
+   * @param archive Archive containing the collection.
+   * @returns The root controlled database collection for `archive`
+   */
+  async listSubcollections(
+    archive: ArchivePackage,
+    parentCollectionId: string,
+    range: PageRange | undefined
+  ) {
+    const listedAssets = await archive.list(
+      AssetCollectionEntity,
+      { parent: parentCollectionId },
+      { range }
+    );
+
+    return {
+      ...listedAssets,
+      items: await Promise.all(
+        listedAssets.items.map((item) => this.toCollectionValue(archive, item))
+      )
+    };
+  }
+
+  /**
+   * Return the root controlled databases collection of the archive. Created if it does not yet exist.
+   *
+   * @param archive Archive containing the collection.
+   * @param parentId Parent collection. All user-created collections must have a parent.
+   * @param opts: Properties of the newly created collection.
+   * @returns The root controlled database collection for `archive`
+   */
+  async createCollection(
+    archive: ArchivePackage,
+    parentId: string,
+    opts: CreateCollectionOpts
+  ) {
+    return archive.useDbTransaction(async (db) => {
+      const collection = db.create(AssetCollectionEntity, {
+        parent: parentId,
+        ...opts
+      });
+      db.persistAndFlush(collection);
+      this.emit('change', { created: [collection.id] });
+
+      return this.toCollectionValue(archive, collection);
+    });
+  }
+
+  /**
+   * Update properties of the collection other than its schema.
+   *
+   * @param archive Archive containing the collection.
+   * @param collectionId Id of the collection.
+   * @param props: New property values.
+   * @returns The updated collection value
+   */
+  updateCollection(
+    archive: ArchivePackage,
+    collectionId: string,
+    props: Pick<AssetCollectionEntity, 'title'>
+  ) {
+    return archive.useDbTransaction(async (db) => {
+      const collection = await db.findOne(
+        AssetCollectionEntity,
+        {
+          id: collectionId
+        },
+        { populate: ['parent'] }
+      );
+      if (!collection) {
+        return error(FetchError.DOES_NOT_EXIST);
+      }
+
+      Object.assign(collection, props);
+      db.persistAndFlush(collection);
+
+      this.emit('change', { updated: [collectionId] });
+
+      return ok(await this.toCollectionValue(archive, collection));
+    });
   }
 
   /**
@@ -84,7 +206,12 @@ export class CollectionService {
         return error(FetchError.DOES_NOT_EXIST);
       }
 
-      let isValid = true;
+      // Map from schema property to counts of validation errors
+      const errorTracker = new DefaultMap<string, DefaultMap<string, number>>(
+        () => new DefaultMap(() => 0)
+      );
+
+      const schemaDef = schema.map(SchemaPropertyValue.fromJson);
 
       for await (const assets of this.recurseiveIterateAssetsWithinCollection(
         archive,
@@ -92,21 +219,40 @@ export class CollectionService {
       )) {
         const validationResults = await this.validateItemsForSchema(
           archive,
-          schema.map(SchemaPropertyValue.fromJson),
+          schemaDef,
           assets
         );
 
-        if (validationResults.some((res) => !res.success)) {
-          isValid = false;
+        // Collect counts of validation errors against properties
+        for (const result of validationResults) {
+          if (!result.success) {
+            for (const [key, errors] of Object.entries(result.errors)) {
+              const propertyErrors = errorTracker.get(key);
+
+              for (const error of errors) {
+                propertyErrors.set(error, propertyErrors.get(error) + 1);
+              }
+            }
+          }
         }
       }
 
-      if (!isValid) {
-        return error(SchemaValidationError);
+      if (errorTracker.size > 0) {
+        const errors = mapValues(
+          Object.fromEntries(errorTracker.entries()),
+          (propertyErrors) =>
+            Array.from(propertyErrors.entries()).map(([message, count]) => ({
+              message,
+              count
+            }))
+        );
+
+        return error<AggregatedValidationError>(errors);
       }
 
       collection.schema = schema.map(SchemaPropertyValue.fromJson);
       await db.persistAndFlush(collection);
+      this.emit('change', { updated: [collectionId] });
 
       return ok();
     });
@@ -145,25 +291,29 @@ export class CollectionService {
     archive: ArchivePackage,
     schema: SchemaPropertyValue[],
     items: { id: string; metadata: Dict }[]
-  ) {
-    const validator = this.getRecordValidator(schema);
+  ): Promise<ValidateItemsResult[]> {
+    const validator = await this.getRecordValidator(archive, schema);
 
-    return items.map(({ id, metadata }) => {
-      const result = validator.safeParse(metadata);
-      if (result.success) {
+    const results = items.map(
+      async ({ id, metadata }): Promise<ValidateItemsResult> => {
+        const result = await validator.safeParseAsync(metadata);
+        if (result.success) {
+          return {
+            id,
+            success: true,
+            metadata: result.data
+          };
+        }
+
         return {
-          id,
-          success: true,
-          metadata: result.data
+          id: id,
+          success: false,
+          errors: result.error.flatten().fieldErrors
         };
       }
+    );
 
-      return {
-        id: id,
-        success: false,
-        errors: result.error.flatten().fieldErrors
-      };
-    });
+    return Promise.all(results);
   }
 
   /**
@@ -186,9 +336,77 @@ export class CollectionService {
    * @param schema Schema definition.
    * @returns a zod validator object generated from the schema.
    */
-  private getRecordValidator(schema: SchemaPropertyValue[]) {
-    return z.object(
-      Object.fromEntries(schema.map(({ id, validator }) => [id, validator]))
+  private async getRecordValidator(
+    archive: ArchivePackage,
+    schema: SchemaPropertyValue[]
+  ) {
+    const context: SchemaValidationContext = {
+      getRecord: (collectionId, itemId) => {
+        return archive.useDb(async (db) => {
+          const asset = await db.findOne(AssetEntity, {
+            collection: collectionId,
+            id: itemId
+          });
+          return asset ?? undefined;
+        });
+      }
+    };
+
+    const fieldValidators = await Promise.all(
+      schema.map(async (property) => {
+        const validator = await property.getValidator(context);
+        return [property.id, validator];
+      })
     );
+    return z.object(Object.fromEntries(fieldValidators));
+  }
+
+  private async toCollectionValue(
+    archive: ArchivePackage,
+    entity: AssetCollectionEntity
+  ): Promise<Collection> {
+    return {
+      id: entity.id,
+      schema: entity.schema.map((e) => e.toJson()),
+      title: entity.title,
+      type: await this.inferCollectionType(archive, entity)
+    };
+  }
+
+  private inferCollectionType(
+    archive: ArchivePackage,
+    entity: AssetCollectionEntity | undefined
+  ) {
+    return archive.useDb(async (db): Promise<CollectionType> => {
+      while (entity) {
+        if (entity.id === CollectionService.ROOT_ASSET_ID) {
+          return CollectionType.ASSET_COLLECTION;
+        }
+        if (entity.id === CollectionService.ROOT_DB_ID) {
+          return CollectionType.CONTROLLED_DATABASE;
+        }
+
+        await db.populate(entity, ['parent']);
+        entity = entity.parent ?? undefined;
+      }
+
+      throw Error('Invalid collection: unknown collection root');
+    });
   }
 }
+
+export interface CollectionsChangedEvent {
+  created?: string[];
+  updated?: string[];
+  deleted?: string[];
+}
+
+interface CollectionEvents {
+  change: [CollectionsChangedEvent];
+}
+
+type ValidateItemsResult =
+  | { success: true; id: string; metadata: Dict }
+  | { success: false; id: string; errors: Dict<string[]> };
+
+type CreateCollectionOpts = Pick<Collection, 'schema' | 'title'>;

@@ -87,6 +87,8 @@ export function useRPC() {
   );
 }
 
+export const SKIP_FETCH = Symbol('SKIP_FETCH');
+
 /**
  * Fetch a single object by type and id and re-fetch whenever a change event affecting it is received.
  *
@@ -96,7 +98,7 @@ export function useRPC() {
  */
 export function useGet<T extends Resource, Err>(
   resource: RpcInterface<Resource, T, Err>,
-  id: string
+  id: string | typeof SKIP_FETCH
 ): Result<T, Err> | undefined;
 /**
  * Fetch a singleton object by type and re-fetch whenever a change event affecting it is received.
@@ -109,7 +111,7 @@ export function useGet<T extends Resource, Err>(
 ): Result<T, Err> | undefined;
 export function useGet<T extends Resource, Err>(
   resource: RpcInterface<Resource | undefined, T, Err>,
-  id?: string
+  id?: string | typeof SKIP_FETCH
 ): Result<T, Err> | undefined {
   const rpc = useRPC();
 
@@ -118,6 +120,10 @@ export function useGet<T extends Resource, Err>(
 
   // Fetch the initial resource value
   useEffect(() => {
+    if (id === SKIP_FETCH) {
+      return;
+    }
+
     rpc(resource, id ? { id } : undefined).then((res) => {
       setCurrent(res);
     });
@@ -125,6 +131,9 @@ export function useGet<T extends Resource, Err>(
 
   // Listen for change events and re-fetch on change
   useEvent(ChangeEvent, ({ type, ids }) => {
+    if (id === SKIP_FETCH) {
+      return;
+    }
     if (type === resource.id && (!id || ids.includes(id))) {
       rpc(resource, id ? { id } : undefined).then((res) => {
         setCurrent(res);
@@ -139,13 +148,13 @@ export function useGet<T extends Resource, Err>(
  * Query a list over rpc and re-fetch when a change event affecting its type happens
  *
  * @param resource RPC call for performing the query.
- * @param query Function returning parameters to the query.
+ * @param query Function returning parameters to the query. Returning 'skip' skips the query and returns undefined.
  * @param deps Dependencies array for `query`.
  * @returns `ListResult` containing the current list value.
  */
 export function useList<T extends Resource, Q, Err>(
   resource: RpcInterface<Q, ResourceList<T>, Err>,
-  query: () => Q,
+  query: () => Q | 'skip',
   deps: unknown[],
   { pageSize, initialFetch } = { pageSize: 50, initialFetch: 150 }
 ): ListCursor<T, Err> | undefined {
@@ -180,6 +189,10 @@ export function useList<T extends Resource, Q, Err>(
   // Fetch a specified range of data and insert it into the page cache.
   const fetchRange = useCallback(
     async ({ offset, limit }: PageRange, opts: { clearCache: boolean }) => {
+      if (q === 'skip') {
+        return;
+      }
+
       const startPage = Math.floor(offset / pageSize);
       const endPage = Math.ceil((offset + limit) / pageSize);
 
@@ -219,6 +232,9 @@ export function useList<T extends Resource, Q, Err>(
   const refetchAll = useCallback(
     () =>
       scheduler.run(async () => {
+        if (q === 'skip') {
+          return;
+        }
         setActive(true);
 
         try {
@@ -232,7 +248,7 @@ export function useList<T extends Resource, Q, Err>(
           setActive(false);
         }
       }),
-    [events, fetchRange, scheduler]
+    [events, fetchRange, q, scheduler]
   );
 
   // Refetch all when an invalidating parameter changes or on first load
@@ -270,7 +286,7 @@ export function useList<T extends Resource, Q, Err>(
           scheduler.run(async () => {
             visibleRange.current = {
               offset: start,
-              limit: Math.max(0, end - start)
+              limit: Math.max(0, end + 1 - start)
             };
           });
         },
@@ -293,13 +309,14 @@ export function useList<T extends Resource, Q, Err>(
 
 export function useListAll<T extends Resource, Q, Err>(
   resource: RpcInterface<Q, ResourceList<T>, Err>,
-  query: () => Q,
+  query: () => Q | 'skip',
   deps: unknown[]
 ): Result<T[]> | undefined {
   const result = useList(resource, query, deps, {
     initialFetch: 10000,
     pageSize: 10000
   });
+
   return useMemo(() => {
     if (!result) {
       return;
@@ -362,5 +379,11 @@ interface ListCursorEvents {
 export function* iterateListCursor<T extends Resource>(cursor: ListCursor<T>) {
   for (let i = 0; i < cursor.totalCount; ++i) {
     yield cursor.get(i);
+  }
+}
+
+export function unwrapGetResult<T>(x: Result<T> | undefined) {
+  if (x?.status === 'ok') {
+    return x.value;
   }
 }

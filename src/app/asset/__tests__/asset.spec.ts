@@ -52,7 +52,12 @@ describe(AssetService, () => {
       })
     ]);
 
-    expect(await fixture.service.listAssets(fixture.archive)).toEqual(
+    expect(
+      await fixture.service.listAssets(
+        fixture.archive,
+        fixture.rootCollection.id
+      )
+    ).toEqual(
       expect.objectContaining({
         items: [
           expect.objectContaining({
@@ -82,7 +87,12 @@ describe(AssetService, () => {
       })
     ]);
 
-    expect(await fixture.service.listAssets(fixture.archive)).toEqual(
+    expect(
+      await fixture.service.listAssets(
+        fixture.archive,
+        fixture.rootCollection.id
+      )
+    ).toEqual(
       expect.objectContaining({
         items: [
           expect.objectContaining({
@@ -149,7 +159,9 @@ async function setup() {
   const collectionService = new CollectionService();
   const mediaService = new MediaFileService();
   const service = new AssetService(collectionService, mediaService);
-  const rootCollection = await collectionService.getRootCollection(archive);
+  const rootCollection = await collectionService.getRootAssetCollection(
+    archive
+  );
   await collectionService.updateCollectionSchema(
     archive,
     rootCollection.id,
