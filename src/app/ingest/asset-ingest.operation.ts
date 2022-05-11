@@ -4,7 +4,7 @@ import { z } from 'zod';
 import * as xlsx from 'xlsx';
 import * as SecureJSON from 'secure-json-parse';
 import { Logger } from 'tslog';
-import { compact } from 'lodash';
+import { compact, keyBy } from 'lodash';
 import { ObjectQuery } from '@mikro-orm/core';
 import { SqlEntityManager } from '@mikro-orm/sqlite';
 
@@ -24,7 +24,12 @@ import {
 import { AssetIngestService } from './asset-ingest.service';
 import { Dict } from '../../common/util/types';
 import { CollectionService } from '../asset/collection.service';
-import { SchemaProperty } from '../../common/asset.interfaces';
+import {
+  SchemaProperty,
+  SchemaPropertyType
+} from '../../common/asset.interfaces';
+import { AssetService } from '../asset/asset.service';
+import { error, FetchError, ok } from '../../common/util/error';
 
 /**
  * Encapsulates an import operation.
@@ -59,7 +64,8 @@ export class AssetIngestOperation implements IngestSession {
     readonly session: ImportSessionEntity,
     private ingestService: AssetIngestService,
     private mediaService: MediaFileService,
-    private collectionService: CollectionService
+    private collectionService: CollectionService,
+    private assetService: AssetService
   ) {}
 
   /**
@@ -143,6 +149,8 @@ export class AssetIngestOperation implements IngestSession {
       return;
     }
 
+    this.collectionService.on('change', this.handleCollectionChanged);
+
     this._active = true;
 
     this.log.info('Starting session');
@@ -154,6 +162,8 @@ export class AssetIngestOperation implements IngestSession {
       if (this.session.phase === IngestPhase.READ_FILES) {
         await this.readMediaFiles();
       }
+
+      await this.revalidate();
     } finally {
       this._active = false;
       this.ingestService.emit('importRunCompleted', this);
@@ -166,6 +176,7 @@ export class AssetIngestOperation implements IngestSession {
    * Abort any pending tasks for the ingest operation.
    **/
   async teardown() {
+    this.collectionService.off('change', this.handleCollectionChanged);
     this._active = false;
   }
 
@@ -249,7 +260,7 @@ export class AssetIngestOperation implements IngestSession {
   async readMetadataSheet(sheetPath: string) {
     this.log.info('Reading metadata sheet', sheetPath);
 
-    const workbook = xlsx.readFile(sheetPath);
+    const workbook = xlsx.readFile(sheetPath, { codepage: 65001 });
     const relativePath = path.relative(this.metadataPath, sheetPath);
 
     for (const [sheetName, sheet] of Object.entries(workbook.Sheets)) {
@@ -279,7 +290,7 @@ export class AssetIngestOperation implements IngestSession {
       this.archive
     );
     const convertToSchema = this.getMetadataConverter(collection.schema);
-    metadata = convertToSchema(metadata);
+    metadata = await convertToSchema(metadata);
 
     await this.archive.useDbTransaction(async (db) => {
       const assetsRepository = db.getRepository(AssetImportEntity);
@@ -335,6 +346,43 @@ export class AssetIngestOperation implements IngestSession {
     this.emitStatus();
   }
 
+  async convertTypeForImport(property: SchemaProperty, value: unknown) {
+    const castedValue = await this.assetService.castOrCreateProperty(
+      this.archive,
+      property,
+      value
+    );
+
+    return castedValue.status === 'error' ? value : castedValue.value;
+  }
+
+  /**
+   * Revalidate all metadata in the import session and update their (and the session's) validation state.
+   */
+  private async revalidate() {
+    await this.archive.useDb(async (db) => {
+      const assets = await db.find(AssetImportEntity, {});
+      const collection = await this.collectionService.getRootAssetCollection(
+        this.archive
+      );
+      const validation =
+        await this.collectionService.validateItemsForCollection(
+          this.archive,
+          collection.id,
+          assets
+        );
+      const assetsById = keyBy(assets, 'id');
+
+      for (const a of validation) {
+        assetsById[a.id].validationErrors = a.success ? undefined : a.errors;
+      }
+
+      this.session.valid = validation.every((v) => v.success);
+      db.persist(assets);
+      db.persist(this.session);
+    });
+  }
+
   /**
    * Return a function that transforms imported metadata keys from their the human-readable label to the metadata
    * property id.
@@ -347,15 +395,23 @@ export class AssetIngestOperation implements IngestSession {
    */
   getMetadataConverter(schema: SchemaProperty[]) {
     const byLabel = Object.fromEntries(
-      schema.map((item) => [item.label, item.id])
+      schema.map((property) => [property.label.toLowerCase(), property])
     );
 
-    return (metadata: Dict) => {
-      const entries = Object.entries(metadata).flatMap(([label, val]) => {
-        const id = byLabel[label];
-        return id ? [[id, val]] : [];
-      });
-      return Object.fromEntries(entries);
+    return async (metadata: Dict) => {
+      const entries = await Promise.all(
+        Object.entries(metadata).map(async ([label, val]) => {
+          const property = byLabel[label.toLowerCase()];
+          if (!property) {
+            return undefined;
+          }
+
+          const preparedValue = await this.convertTypeForImport(property, val);
+          return [property.id, preparedValue];
+        })
+      );
+
+      return Object.fromEntries(compact(entries));
     };
   }
 
@@ -474,6 +530,57 @@ export class AssetIngestOperation implements IngestSession {
   }
 
   /**
+   * Update the metadata for an imported asset.
+   *
+   * Unlike the update method for assets in the archive proper, this allows edits that are invalid according to the
+   * schema.
+   *
+   * @param assetId ID of the asset to update metadata for.
+   * @param metadata Dictionary mapping property ids to metadata values
+   * @returns Result indicating whether the edit is valid or invalid.
+   */
+  async updateImportedAsset(assetId: string, metadata: Dict) {
+    const res = await this.archive.useDb(async (db) => {
+      const asset = await db.findOne(AssetImportEntity, assetId);
+      if (!asset) {
+        return error(FetchError.DOES_NOT_EXIST);
+      }
+
+      const collection = await this.collectionService.getRootAssetCollection(
+        this.archive
+      );
+
+      asset.metadata = metadata;
+
+      const [validationResult] =
+        await this.collectionService.validateItemsForCollection(
+          this.archive,
+          collection.id,
+          [{ id: asset.id, metadata: metadata ?? asset?.metadata }]
+        );
+
+      if (!validationResult.success) {
+        asset.validationErrors = validationResult.errors;
+      } else {
+        asset.validationErrors = undefined;
+      }
+
+      db.persist(asset);
+      return ok();
+    });
+
+    await this.revalidate();
+
+    this.ingestService.emit('edit', {
+      archive: this.archive,
+      assetIds: [assetId],
+      session: this
+    });
+
+    return res;
+  }
+
+  /**
    * Convenience for emitting a `status` event for this ingest operation.
    *
    * @param affectedIds Asset ids affected by the current change.
@@ -485,6 +592,11 @@ export class AssetIngestOperation implements IngestSession {
       session: this
     });
   }
+
+  private handleCollectionChanged = async () => {
+    await this.revalidate();
+    this.emitStatus();
+  };
 }
 
 /**

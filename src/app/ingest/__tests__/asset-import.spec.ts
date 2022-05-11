@@ -6,12 +6,15 @@ import {
 } from '../../../common/asset.interfaces';
 
 import { IngestPhase } from '../../../common/ingest.interfaces';
+import { error, ok, Result } from '../../../common/util/error';
+import { MaybeAsync } from '../../../common/util/types';
 import { collectEvents, waitUntilEvent } from '../../../test/event';
 import { getTempfiles, getTempPackage } from '../../../test/tempfile';
 import { AssetsChangedEvent, AssetService } from '../../asset/asset.service';
 import { CollectionService } from '../../asset/collection.service';
 import { MediaFile } from '../../media/media-file.entity';
 import { MediaFileService } from '../../media/media-file.service';
+import { ArchivePackage } from '../../package/archive-package';
 import {
   AssetImportEntity,
   FileImport,
@@ -23,7 +26,9 @@ import {
 } from '../asset-ingest.service';
 
 describe('AssetImportOperation', () => {
-  jest.setTimeout(15000);
+  if (!process.env.NO_OVERRIDE_TIMEOUTS) {
+    jest.setTimeout(15000);
+  }
 
   test('imports assets', async () => {
     const fixture = await setup();
@@ -89,7 +94,7 @@ describe('AssetImportOperation', () => {
 
     await fixture.givenThatAnImportSessionHasRunSuccessfuly();
 
-    expect(events).toEqual(
+    expect(events.events).toEqual(
       expect.arrayContaining([
         {
           phase: IngestPhase.READ_METADATA,
@@ -190,7 +195,7 @@ describe('AssetImportOperation', () => {
     expect(mediaFiles.total).toBe(0);
 
     // Emits change events
-    expect(events).toEqual(['changed']);
+    expect(events.events).toEqual(['changed']);
 
     // Removes session
     const sessions = fixture.importService.listSessions(fixture.archive);
@@ -212,7 +217,7 @@ describe('AssetImportOperation', () => {
     expect(importedFiles.total).toBe(0);
 
     // Emits change events
-    expect(events).toEqual(['changed']);
+    expect(events.events).toEqual(['changed']);
 
     // Removes session
     const sessions = fixture.importService.listSessions(fixture.archive);
@@ -254,7 +259,158 @@ describe('AssetImportOperation', () => {
     );
 
     // Emits change events for each created assets
-    expect(assetEvents.flatMap((event) => event.created)).toHaveLength(2);
+    expect(assetEvents.events.flatMap((event) => event.created)).toHaveLength(
+      2
+    );
+  });
+
+  test('updating assets in a session changes their metadata and revalidates the import', async () => {
+    const fixture = await setup();
+    await fixture.givenACollectionMetadataSchema([
+      {
+        label: 'property',
+        id: 'p',
+        type: SchemaPropertyType.FREE_TEXT,
+        required: true
+      },
+      {
+        label: 'extraProperty',
+        id: 'extra',
+        type: SchemaPropertyType.FREE_TEXT,
+        required: true
+      }
+    ]);
+
+    const session = await fixture.givenThatAnImportSessionHasRunSuccessfuly();
+    expect(session.valid).toBeFalsy();
+
+    let assets = await fixture.importService.listSessionAssets(
+      fixture.archive,
+      session.id
+    );
+
+    const sessionsEmittingEdit = fixture.editEvents((e) => e.session);
+    for (const asset of assets.items) {
+      await session.updateImportedAsset(asset.id, {
+        ...asset.metadata,
+        extra: 'Some Value'
+      });
+    }
+
+    assets = await fixture.importService.listSessionAssets(
+      fixture.archive,
+      session.id
+    );
+
+    expect(assets.items.every((a) => !a.validationErrors)).toBeTruthy();
+    expect(session.valid).toBeTruthy();
+    expect(sessionsEmittingEdit.events).toContain(session);
+  });
+
+  test('updating the schema revalidates the assets in the import session', async () => {
+    const fixture = await setup();
+    await fixture.givenACollectionMetadataSchema([
+      {
+        label: 'property',
+        id: 'p',
+        type: SchemaPropertyType.FREE_TEXT,
+        required: true
+      },
+      {
+        label: 'extraProperty',
+        id: 'extra',
+        type: SchemaPropertyType.FREE_TEXT,
+        required: true
+      }
+    ]);
+
+    const session = await fixture.givenThatAnImportSessionHasRunSuccessfuly();
+    expect(session.valid).toBeFalsy();
+
+    const fixtureStatusEvents = fixture.statusEvents((e) => e);
+    await fixture.collectionService.updateCollectionSchema(
+      fixture.archive,
+      fixture.rootCollection.id,
+      [
+        {
+          label: 'property',
+          id: 'p',
+          type: SchemaPropertyType.FREE_TEXT,
+          required: true
+        },
+        {
+          label: 'extraProperty',
+          id: 'extra',
+          type: SchemaPropertyType.FREE_TEXT,
+          required: false
+        }
+      ]
+    );
+
+    await fixtureStatusEvents.received();
+    expect(session.valid).toBeTruthy();
+  });
+
+  test('Properties are casted to the expected type', async () => {
+    const fixture = await setup();
+    await fixture.collectionService.updateCollectionSchema(
+      fixture.archive,
+      fixture.rootCollection.id,
+      [
+        {
+          label: 'property',
+          id: 'property',
+          type: SchemaPropertyType.FREE_TEXT,
+          required: true
+        }
+      ]
+    );
+
+    fixture.assetService.castOrCreateProperty = (_, _property, value) => {
+      if (typeof value === 'string') {
+        return ok(value.toUpperCase());
+      }
+
+      return ok(value);
+    };
+
+    const session = await fixture.givenThatAnImportSessionHasRunSuccessfuly();
+    const assets = await fixture.importService.listSessionAssets(
+      fixture.archive,
+      session.id
+    );
+
+    expect(assets.items.map((item) => item.metadata.property)).toContain(
+      'VALUE1'
+    );
+  });
+
+  test('Where a property cannot be casted, the literal imported value is preserved', async () => {
+    const fixture = await setup();
+    await fixture.collectionService.updateCollectionSchema(
+      fixture.archive,
+      fixture.rootCollection.id,
+      [
+        {
+          label: 'property',
+          id: 'property',
+          type: SchemaPropertyType.FREE_TEXT,
+          required: true
+        }
+      ]
+    );
+
+    fixture.assetService.castOrCreateProperty = () => error('Cannot be casted');
+
+    const session = await fixture.givenThatAnImportSessionHasRunSuccessfuly();
+    const assets = await fixture.importService.listSessionAssets(
+      fixture.archive,
+      session.id
+    );
+
+    expect(assets.items.map((item) => item.metadata.property)).toContain(
+      'value1'
+    );
   });
 });
 
@@ -289,6 +445,9 @@ const setup = async () => {
     },
     statusEvents: <T>(fn: (event: ImportStateChanged) => T) => {
       return collectEvents(importService, 'status', fn);
+    },
+    editEvents: <T>(fn: (event: ImportStateChanged) => T) => {
+      return collectEvents(importService, 'edit', fn);
     },
     givenThatAnImportSessionHasRunSuccessfuly: async (
       example: string = BASIC_EXAMPLE

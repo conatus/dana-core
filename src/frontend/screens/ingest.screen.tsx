@@ -67,6 +67,9 @@ export const ArchiveIngestScreen: FC = () => {
         asset={selectedAsset}
         sx={{ width: '100%', height: '100%' }}
         collection={collection.value}
+        errors={selectedAsset.validationErrors ?? undefined}
+        sessionId={sessionId}
+        action="import"
       />
     ) : undefined;
 
@@ -121,7 +124,11 @@ function useCompleteImport(sessionId: string) {
       return;
     }
 
-    navigate(`/collection`);
+    const collection = await rpc(GetRootAssetsCollection, {});
+
+    navigate(
+      collection.status === 'ok' ? `/collection/${collection.value.id}` : '/'
+    );
 
     return;
   }, [navigate, rpc, sessionId]);

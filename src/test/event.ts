@@ -1,5 +1,5 @@
 import EventEmitter from 'eventemitter3';
-import { isEqual } from 'lodash';
+import { isEqual, noop } from 'lodash';
 import { Dict } from '../common/util/types';
 
 /**
@@ -33,7 +33,7 @@ export function waitUntilEvent(
 export function collectEvents<Event>(
   emitter: EventEmitter<Dict>,
   event: string
-): Event[];
+): { events: Event[]; received(): Promise<void> };
 
 /**
  * Return a mutable array that gathers events fired on an eventemitter.
@@ -47,14 +47,34 @@ export function collectEvents<Event, T>(
   emitter: EventEmitter<Dict>,
   event: string,
   fn: (event: Event) => T
-): T[];
+): { events: T[]; received(): Promise<void> };
 export function collectEvents(
   emitter: EventEmitter<Dict>,
   event: string,
   fn?: (event: unknown) => unknown
 ) {
-  const events: unknown[] = [];
-  emitter.on(event, (event) => events.push(fn ? fn(event) : event));
+  let onReceived = noop;
 
-  return events;
+  const events: unknown[] = [];
+  emitter.on(event, (event) => {
+    events.push(fn ? fn(event) : event);
+    onReceived();
+  });
+
+  const received = new Promise<void>((resolve) => {
+    onReceived = resolve;
+  });
+
+  return {
+    events,
+    received: () =>
+      Promise.race([
+        new Promise<void>((_, reject) => {
+          setTimeout(() => {
+            reject(new Error('Timed out waiting for event'));
+          }, 5_000);
+        }),
+        received
+      ])
+  };
 }
