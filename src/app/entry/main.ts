@@ -6,6 +6,7 @@ import { autoUpdater } from 'electron-updater';
 import { initAssets } from '../asset/asset.init';
 import { initApp } from '../electron/app';
 import {
+  DEFAULT_AUTOLOAD_ARCHIVES,
   getUserConfig,
   SHOW_DEVTOOLS,
   updateUserConfig
@@ -15,10 +16,13 @@ import { createFrontendWindow, initWindows } from '../electron/window';
 import { initIngest } from '../ingest/ingest.init';
 import { initMedia } from '../media/media.init';
 import { ArchivePackage } from '../package/archive-package';
+import { Logger } from 'tslog';
+import { stat } from 'fs/promises';
 
 async function main() {
   let newArchiveWindow: BrowserWindow | undefined;
   const app = await initApp();
+  const log = new Logger({ name: 'App' });
 
   await initUpdates();
   await initWindows(app.router);
@@ -63,7 +67,9 @@ async function main() {
     // When an archive document is opened, add it to the autoload array.
     app.archiveService.on('opened', async ({ archive }) => {
       updateUserConfig((config) => {
-        config.autoload[archive.location] = { autoload: true };
+        config.autoload[archive.location] = {
+          autoload: DEFAULT_AUTOLOAD_ARCHIVES
+        };
       });
     });
   }
@@ -110,10 +116,19 @@ async function main() {
 
     // Open any autoloaded archives
     const settings = await getUserConfig();
+
     for (const [location, opts] of Object.entries(settings.autoload)) {
+      try {
+        await stat(location);
+      } catch {
+        await updateUserConfig((prev) => {
+          delete prev.autoload[location];
+        });
+      }
+
       if (opts.autoload) {
+        await app.archiveService.openArchive(location);
         hasAutoloaded = true;
-        app.archiveService.openArchive(location);
       }
     }
 
@@ -134,7 +149,8 @@ async function main() {
     const window = await createFrontendWindow({
       title: 'New Archive',
       config: {},
-      router: app.router
+      router: app.router,
+      size: 'small'
     });
 
     window.on('close', () => {
@@ -182,7 +198,13 @@ async function main() {
   }
 
   async function initUpdates() {
-    await autoUpdater.checkForUpdatesAndNotify();
+    autoUpdater.allowPrerelease = true;
+
+    try {
+      await autoUpdater.checkForUpdatesAndNotify();
+    } catch (error) {
+      log.error('Auto-update failed with error', error);
+    }
   }
 }
 

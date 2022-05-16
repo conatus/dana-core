@@ -1,6 +1,6 @@
 {
   "name": "dana-core",
-  "version": "0.2.0",
+  "version": "0.2.3",
   "private": true,
   "author": "Common Knowledge <hello@commonknowledge.coop>",
   "main": "build/electron/main.cjs",
@@ -15,6 +15,9 @@
     "test": "jest --passWithNoTests --forceExit",
     "storybook": "start-storybook -p 6006",
     "build-storybook": "build-storybook"
+  },
+  "resolutions": {
+    "@types/react": "^17.0.41"
   },
   "lint-staged": {
     "*.{js,jsx,ts,tsx}": [
@@ -34,6 +37,7 @@
   },
   "dependencies": {
     "@emotion/react": "^11.8.2",
+    "@mdx-js/react": "^2.1.1",
     "@mikro-orm/core": "^5.1.1",
     "@mikro-orm/migrations": "^5.1.1",
     "@mikro-orm/sqlite": "^5.1.1",

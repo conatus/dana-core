@@ -19,8 +19,10 @@ import { getFrontendPlatform } from '../util/platform';
 import {
   FRONTEND_BUNDLE_DIR,
   FRONTEND_ENTRYPOINT,
+  HIDE_UNTIL_RENDER,
   SHOW_DEVTOOLS
 } from './config';
+import { RELEASE_DATE } from './release';
 import { getResourcePath } from './resources';
 import { ElectronRouter } from './router';
 
@@ -29,7 +31,12 @@ interface CreateFrontendWindow {
   title: string;
 
   /** Config object passed to frontend */
-  config: Omit<FrontendConfig, 'platform' | 'windowId'>;
+  config: Omit<
+    FrontendConfig,
+    'platform' | 'windowId' | 'version' | 'releaseDate'
+  >;
+
+  size?: 'small' | 'regular';
 
   /** Resolve `media:` url schemes to an absolute path */
   resolveMedia?: MediaResolveFn;
@@ -44,6 +51,7 @@ type MediaResolveFn = (uri: string) => string;
 export async function createFrontendWindow({
   title,
   config,
+  size = 'regular',
   resolveMedia,
   router
 }: CreateFrontendWindow) {
@@ -51,32 +59,56 @@ export async function createFrontendWindow({
     ...config,
     windowId: uniqueId(),
     platform: getFrontendPlatform(),
-    title
+    title,
+    version: app.getVersion(),
+    releaseDate: RELEASE_DATE
+  };
+
+  const getSize = () => {
+    if (size === 'regular') {
+      return {
+        height: 950,
+        width: 1100,
+        minWidth: 280,
+        minHeight: 155
+      };
+    }
+
+    if (size === 'small') {
+      return {
+        height: 300,
+        width: 300,
+        minWidth: 300,
+        minHeight: 300,
+        resizable: false,
+        minimizable: false,
+        maximizable: false
+      };
+    }
   };
 
   const partition = initUrlSchemePartition(resolveMedia);
   const frontendWindow = new BrowserWindow({
     title,
 
-    height: 950,
-    width: 1100,
-    minWidth: 280,
-    minHeight: 155,
-
     // Prevent flash of empty content by waiting until we've rendered before showing
-    paintWhenInitiallyHidden: true,
-    show: false,
+    ...(HIDE_UNTIL_RENDER
+      ? {
+          paintWhenInitiallyHidden: true,
+          show: false
+        }
+      : {}),
 
     // Show a frameless window so that we can render our own chrome
     frame: false,
-    transparent: true,
+    transparent: platform() !== 'win32',
     resizable: true,
     minimizable: true,
     maximizable: true,
     fullscreenable: true,
     closable: true,
     titleBarStyle: 'hidden',
-    titleBarOverlay: platform() !== 'darwin',
+    titleBarOverlay: false,
     thickFrame: false,
 
     webPreferences: {
@@ -86,7 +118,9 @@ export async function createFrontendWindow({
       webSecurity: true,
       partition,
       preload: getResourcePath('preload/browser-preload.js')
-    }
+    },
+
+    ...getSize()
   });
 
   const emitState = (state: MaximizationState) => {
@@ -155,7 +189,10 @@ function showWindowAfterFirstRender(
         return;
       }
 
-      window.show();
+      if (HIDE_UNTIL_RENDER) {
+        window.show();
+      }
+
       resolve();
 
       if (SHOW_DEVTOOLS) {
