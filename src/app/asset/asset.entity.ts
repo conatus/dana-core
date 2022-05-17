@@ -39,7 +39,7 @@ export class AssetEntity {
    * Key-value metadata properties. Keys are the id of schema property
    */
   @Property({ type: 'json', nullable: false })
-  metadata: Dict = {};
+  metadata: Dict<unknown[]> = {};
 }
 
 /**
@@ -113,6 +113,6 @@ export class AssetCollectionEntity {
       !!titleProperty &&
       this.schema.every((x) => !x.required || x.id === titleProperty.id);
 
-    return canBeLabelRecord ? { [titleProperty.id]: title } : undefined;
+    return canBeLabelRecord ? { [titleProperty.id]: [title] } : undefined;
   }
 }

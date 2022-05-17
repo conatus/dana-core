@@ -5,6 +5,35 @@ import { Media } from './media.interfaces';
 import { ResourceList } from './resource';
 import { FetchError } from './util/error';
 
+const AssetMetadataItem = z.object({
+  rawValue: z.array(z.unknown().optional()),
+  presentationValue: z.array(
+    z.object({ rawValue: z.unknown().optional(), label: z.string() })
+  )
+});
+/**
+ * Represent a metadata property of an asset. Contains all the information required to display or edit a single metadata
+ * property.
+ **/
+export interface AssetMetadataItem<T = unknown> {
+  /*
+   * The canonical value of the property, as stored in the database.
+   *
+   * Property values are always repredented using an array in order to allow for consistent treatment of single and
+   * repated occurances in the schema.
+   *
+   * A null value for a non-repeated property implies a rawValue of `[]`.
+   * A value for a non-repeated property implies an array of length 1
+   * A repeated property will have 0 or more elements.
+   */
+  rawValue: (T | undefined)[];
+
+  /**
+   * For each element in `rawValue`, both the raw value and a human-readable string representation of it.
+   */
+  presentationValue: { rawValue?: T; label: string }[];
+}
+
 /**
  * Represent a single asset.
  */
@@ -12,13 +41,17 @@ export const Asset = z.object({
   /** Unique id of the asset */
   id: z.string(),
 
+  /** Title of the assset */
+  title: z.string(),
+
   /** Record of metadata associated with the asset */
-  metadata: z.record(z.unknown()),
+  metadata: z.record(AssetMetadataItem),
 
   /** All media files associated with the asset */
   media: z.array(Media)
 });
 export type Asset = z.TypeOf<typeof Asset>;
+export type AssetMetadata = Asset['metadata'];
 
 /**
  * Enum value for possible schema property types.
@@ -40,6 +73,9 @@ const BaseSchemaProperty = z.object({
 
   /** Is the property required? */
   required: z.boolean(),
+
+  /** Does the property support multiple occurances? */
+  repeated: z.boolean(),
 
   /** Underlying type of the property? */
   type: z.nativeEnum(SchemaPropertyType)
@@ -118,6 +154,7 @@ export const defaultSchemaProperty = (i: number): SchemaProperty => ({
   id: v4(),
   label: `Property ${i}`,
   required: false,
+  repeated: false,
   type: SchemaPropertyType.FREE_TEXT
 });
 
@@ -250,7 +287,7 @@ export const CreateAsset = RpcInterface({
   id: 'assets/create',
   request: z.object({
     collection: z.string(),
-    metadata: z.record(z.unknown())
+    metadata: z.record(z.array(z.unknown()))
   }),
   response: Asset,
   error: z.nativeEnum(FetchError)
@@ -278,7 +315,7 @@ export const UpdateAssetMetadata = RpcInterface({
   id: 'assets/update',
   request: z.object({
     assetId: z.string(),
-    payload: z.record(z.unknown())
+    payload: z.record(z.array(z.unknown()))
   }),
   response: z.object({}),
   error: z.nativeEnum(FetchError).or(SingleValidationError)

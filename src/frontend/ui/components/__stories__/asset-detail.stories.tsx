@@ -4,6 +4,11 @@ import faker from '@faker-js/faker';
 import { FC, useMemo, useRef, useState } from 'react';
 import { z } from 'zod';
 import {
+  assetMetadata,
+  someAsset,
+  someMetadata
+} from '../../../../app/asset/test-utils';
+import {
   CollectionType,
   GetCollection,
   SchemaProperty,
@@ -15,7 +20,6 @@ import { Media } from '../../../../common/media.interfaces';
 import { never } from '../../../../common/util/assert';
 import { compactDict } from '../../../../common/util/collection';
 import { error, ok } from '../../../../common/util/error';
-import { Dict } from '../../../../common/util/types';
 import { IpcContext } from '../../../ipc/ipc.hooks';
 import { MockIpc } from '../../../ipc/mock-ipc';
 import { AssetDetail } from '../asset-detail.component';
@@ -30,15 +34,13 @@ interface Params {
 }
 
 export const NarrowWithMedia: FC<Params> = ({ onUpdate }) => {
-  const [metadata, setMetadata] = useState<Dict>(() => {
+  const [metadata, setMetadata] = useState(() => {
     faker.seed(1);
-    return {
-      someProperty: faker.lorem.words(3)
-    };
+    return someMetadata(SCHEMA);
   });
 
   const ipc = useIpcFixture((change) => {
-    setMetadata(change.payload);
+    setMetadata(assetMetadata(change.payload));
     onUpdate(change);
   });
 
@@ -51,11 +53,7 @@ export const NarrowWithMedia: FC<Params> = ({ onUpdate }) => {
           height: '100vh',
           overflow: 'auto'
         }}
-        asset={{
-          id: faker.datatype.uuid(),
-          media: MEDIA_FILES,
-          metadata: metadata
-        }}
+        asset={someAsset({ metadata })}
         collection={{
           id: 'someCollection',
           title: 'Some Collection',
@@ -69,15 +67,13 @@ export const NarrowWithMedia: FC<Params> = ({ onUpdate }) => {
 };
 
 export const CreateMode: FC<Params> = ({ onUpdate }) => {
-  const [metadata, setMetadata] = useState<Dict>(() => {
+  const [metadata, setMetadata] = useState(() => {
     faker.seed(1);
-    return {
-      someProperty: faker.lorem.words(3)
-    };
+    return someMetadata(SCHEMA);
   });
 
   const ipc = useIpcFixture((change) => {
-    setMetadata(change.payload);
+    setMetadata(assetMetadata(change.payload));
     onUpdate(change);
   });
 
@@ -90,11 +86,10 @@ export const CreateMode: FC<Params> = ({ onUpdate }) => {
           height: '100vh',
           overflow: 'auto'
         }}
-        asset={{
-          id: faker.datatype.uuid(),
+        asset={someAsset({
           media: MEDIA_FILES,
-          metadata: metadata
-        }}
+          metadata
+        })}
         collection={{
           id: 'someCollection',
           title: 'Some Collection',
@@ -162,12 +157,14 @@ const SCHEMA: SchemaProperty[] = [
     id: 'someProperty',
     label: 'Some Property',
     required: true,
+    repeated: false,
     type: SchemaPropertyType.FREE_TEXT
   },
   {
     id: 'databaseRef',
     label: 'Database Reference',
     required: false,
+    repeated: false,
     type: SchemaPropertyType.CONTROLLED_DATABASE,
     databaseId: 'testDb'
   }
@@ -188,7 +185,9 @@ const Validator = z.object(
 
       return [
         property.id,
-        property.required ? validator : validator.optional()
+        property.required
+          ? z.array(validator).min(1)
+          : z.array(validator).optional()
       ];
     })
   )

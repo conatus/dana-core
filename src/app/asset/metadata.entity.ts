@@ -2,12 +2,13 @@ import { Embeddable, Property } from '@mikro-orm/core';
 import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import {
+  AssetMetadataItem,
   ControlledDatabaseSchemaProperty,
   ScalarSchemaProperty,
   SchemaProperty,
   SchemaPropertyType
 } from '../../common/asset.interfaces';
-import { never } from '../../common/util/assert';
+import { assert, never } from '../../common/util/assert';
 import { error, FetchError, ok, Result } from '../../common/util/error';
 import { MaybeAsync } from '../../common/util/types';
 import { ArchivePackage } from '../package/archive-package';
@@ -45,6 +46,12 @@ export abstract class SchemaPropertyValue {
     }
   }
 
+  constructor() {
+    if (typeof this.repeated === 'undefined') {
+      this.repeated = false;
+    }
+  }
+
   /**
    * Id of the property. This will be the key used to record metadata values in an asset.
    */
@@ -67,27 +74,38 @@ export abstract class SchemaPropertyValue {
    * True if the property is required.
    */
   @Property({ type: 'boolean' })
-  required!: boolean;
+  required = false;
 
   /**
-   * Override to define collections referenced by this property. Defaults to none.
-   *
-   * @returns The id of a referenced collection or undefined if none.
+   * True if the property supports multiple occurances.
    */
-  getReferencedCollection(): string | undefined {
-    return undefined;
-  }
+  @Property({ type: 'boolean', default: true })
+  repeated!: boolean;
+
+  /**
+   * Override to define how raw values in the database are converted into `AssetMetadataItem` values for presentation
+   * in the UI
+   */
+  abstract convertToMetadataItems(
+    context: AssetContext,
+    value: unknown[]
+  ): Promise<AssetMetadataItem>;
 
   /**
    * Return a zod validator object for this schema property.
    */
   async getValidator(context: CollectionContext) {
-    if (!this.required) {
-      const innerSchema = await this.getValueSchema(context);
-      return innerSchema.optional();
+    let schema = z.array(await this.getValueSchema(context));
+
+    if (!this.repeated) {
+      schema = schema.max(1);
     }
 
-    return this.getValueSchema(context);
+    if (this.required) {
+      return schema.min(1);
+    } else {
+      return schema.optional();
+    }
   }
 
   /**
@@ -149,6 +167,19 @@ export class FreeTextSchemaPropertyValue
 
   toJson() {
     return this;
+  }
+
+  async convertToMetadataItems(
+    context: AssetContext,
+    value: unknown[]
+  ): Promise<AssetMetadataItem<unknown>> {
+    return {
+      rawValue: value,
+      presentationValue: value.map((rawValue) => ({
+        rawValue,
+        label: String(rawValue)
+      }))
+    };
   }
 }
 
@@ -245,8 +276,26 @@ export class ControlledDatabaseSchemaPropertyValue
     return this;
   }
 
-  getReferencedCollection(): string | undefined {
-    return this.databaseId;
+  async convertToMetadataItems(
+    { assets, archive }: AssetContext,
+    value: unknown[]
+  ): Promise<AssetMetadataItem> {
+    assert(
+      value.every((x) => typeof x === 'string'),
+      'Expected array of asset ids'
+    );
+
+    const items = await assets.getMultiple(archive, value as string[], {
+      shallow: true
+    });
+
+    return {
+      rawValue: value,
+      presentationValue: items.map((x) => ({
+        rawValue: x.id,
+        label: x.title
+      }))
+    };
   }
 }
 

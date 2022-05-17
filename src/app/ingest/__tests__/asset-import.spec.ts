@@ -1,4 +1,4 @@
-import { compact } from 'lodash';
+import { compact, mapValues } from 'lodash';
 import path from 'path';
 import {
   SchemaProperty,
@@ -6,15 +6,14 @@ import {
 } from '../../../common/asset.interfaces';
 
 import { IngestPhase } from '../../../common/ingest.interfaces';
-import { error, ok, Result } from '../../../common/util/error';
-import { MaybeAsync } from '../../../common/util/types';
+import { error, ok } from '../../../common/util/error';
 import { collectEvents, waitUntilEvent } from '../../../test/event';
 import { getTempfiles, getTempPackage } from '../../../test/tempfile';
 import { AssetsChangedEvent, AssetService } from '../../asset/asset.service';
 import { CollectionService } from '../../asset/collection.service';
+import { assetMetadata, assetMetadataItem } from '../../asset/test-utils';
 import { MediaFile } from '../../media/media-file.entity';
 import { MediaFileService } from '../../media/media-file.service';
-import { ArchivePackage } from '../../package/archive-package';
 import {
   AssetImportEntity,
   FileImport,
@@ -37,6 +36,7 @@ describe('AssetImportOperation', () => {
         type: SchemaPropertyType.FREE_TEXT,
         id: 'internalPropertyId',
         label: 'property',
+        repeated: false,
         required: true
       }
     ]);
@@ -67,6 +67,7 @@ describe('AssetImportOperation', () => {
       {
         type: SchemaPropertyType.FREE_TEXT,
         id: 'missingProperty',
+        repeated: false,
         label: 'not there',
         required: true
       }
@@ -230,6 +231,7 @@ describe('AssetImportOperation', () => {
       {
         label: 'property',
         id: 'p',
+        repeated: false,
         type: SchemaPropertyType.FREE_TEXT,
         required: true
       }
@@ -253,8 +255,8 @@ describe('AssetImportOperation', () => {
     expect(assets.items.map((item) => item.media)).toHaveLength(2);
     expect(assets.items).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ metadata: { p: 'value1' } }),
-        expect.objectContaining({ metadata: { p: 'value2' } })
+        expect.objectContaining({ metadata: assetMetadata({ p: ['value1'] }) }),
+        expect.objectContaining({ metadata: assetMetadata({ p: ['value2'] }) })
       ])
     );
 
@@ -271,13 +273,15 @@ describe('AssetImportOperation', () => {
         label: 'property',
         id: 'p',
         type: SchemaPropertyType.FREE_TEXT,
-        required: true
+        required: true,
+        repeated: true
       },
       {
         label: 'extraProperty',
         id: 'extra',
         type: SchemaPropertyType.FREE_TEXT,
-        required: true
+        required: true,
+        repeated: true
       }
     ]);
 
@@ -292,8 +296,8 @@ describe('AssetImportOperation', () => {
     const sessionsEmittingEdit = fixture.editEvents((e) => e.session);
     for (const asset of assets.items) {
       await session.updateImportedAsset(asset.id, {
-        ...asset.metadata,
-        extra: 'Some Value'
+        ...mapValues(asset.metadata, (x) => x.rawValue),
+        extra: ['Some Value']
       });
     }
 
@@ -314,13 +318,15 @@ describe('AssetImportOperation', () => {
         label: 'property',
         id: 'p',
         type: SchemaPropertyType.FREE_TEXT,
-        required: true
+        required: true,
+        repeated: true
       },
       {
         label: 'extraProperty',
         id: 'extra',
         type: SchemaPropertyType.FREE_TEXT,
-        required: true
+        required: true,
+        repeated: true
       }
     ]);
 
@@ -336,13 +342,15 @@ describe('AssetImportOperation', () => {
           label: 'property',
           id: 'p',
           type: SchemaPropertyType.FREE_TEXT,
-          required: true
+          required: true,
+          repeated: true
         },
         {
           label: 'extraProperty',
           id: 'extra',
           type: SchemaPropertyType.FREE_TEXT,
-          required: false
+          required: false,
+          repeated: true
         }
       ]
     );
@@ -361,7 +369,8 @@ describe('AssetImportOperation', () => {
           label: 'property',
           id: 'property',
           type: SchemaPropertyType.FREE_TEXT,
-          required: true
+          required: true,
+          repeated: true
         }
       ]
     );
@@ -380,8 +389,8 @@ describe('AssetImportOperation', () => {
       session.id
     );
 
-    expect(assets.items.map((item) => item.metadata.property)).toContain(
-      'VALUE1'
+    expect(assets.items.map((item) => item.metadata.property)).toContainEqual(
+      assetMetadataItem(['VALUE1'])
     );
   });
 
@@ -395,7 +404,8 @@ describe('AssetImportOperation', () => {
           label: 'property',
           id: 'property',
           type: SchemaPropertyType.FREE_TEXT,
-          required: true
+          required: true,
+          repeated: true
         }
       ]
     );
@@ -408,8 +418,8 @@ describe('AssetImportOperation', () => {
       session.id
     );
 
-    expect(assets.items.map((item) => item.metadata.property)).toContain(
-      'value1'
+    expect(assets.items.map((item) => item.metadata.property)).toContainEqual(
+      assetMetadataItem(['value1'])
     );
   });
 });

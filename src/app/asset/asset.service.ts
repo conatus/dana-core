@@ -1,5 +1,10 @@
 import { EventEmitter } from 'eventemitter3';
-import { Asset, SchemaProperty } from '../../common/asset.interfaces';
+import {
+  Asset,
+  SchemaProperty,
+  SchemaPropertyType
+} from '../../common/asset.interfaces';
+import { mapValues } from 'lodash';
 import { PageRange } from '../../common/ipc.interfaces';
 import { ResourceList } from '../../common/resource';
 import { error, FetchError, ok, Result } from '../../common/util/error';
@@ -7,13 +12,13 @@ import { Dict } from '../../common/util/types';
 import { MediaFile } from '../media/media-file.entity';
 import { MediaFileService } from '../media/media-file.service';
 import { ArchivePackage } from '../package/archive-package';
-import { AssetEntity } from './asset.entity';
+import { AssetCollectionEntity, AssetEntity } from './asset.entity';
 import { CollectionService } from './collection.service';
 import { SchemaPropertyValue } from './metadata.entity';
 
 interface CreateAssetOpts {
   /** Metadata to associate with the asset. This must be valid according to the archive schema */
-  metadata: Record<string, unknown>;
+  metadata: Record<string, unknown[]>;
 
   /** Media to associate with the asset */
   media?: MediaFile[];
@@ -47,9 +52,10 @@ export class AssetService extends EventEmitter<AssetEvents> {
     { metadata, media = [] }: CreateAssetOpts
   ) {
     const res = await archive.useDb(async (db) => {
+      const collection = await db.findOne(AssetCollectionEntity, collectionId);
       const asset = db.create(AssetEntity, {
         mediaFiles: [],
-        collection: collectionId,
+        collection,
         metadata: {}
       });
 
@@ -67,16 +73,9 @@ export class AssetService extends EventEmitter<AssetEvents> {
 
       db.persist(asset);
 
-      return ok<Asset>({
-        id: asset.id,
-        metadata: asset.metadata,
-        media: media.map((m) => ({
-          id: m.id,
-          mimeType: m.mimeType,
-          rendition: this.mediaService.getRenditionUri(archive, m),
-          type: 'image'
-        }))
-      });
+      return ok<Asset>(
+        await this.entityToAsset(archive, asset, { shallow: false })
+      );
     });
 
     if (res.status === 'ok') {
@@ -110,7 +109,7 @@ export class AssetService extends EventEmitter<AssetEvents> {
       const asset = await db.findOne(
         AssetEntity,
         { id: assetId },
-        { populate: ['collection'] }
+        { populate: ['collection', 'mediaFiles'] }
       );
       if (!asset) {
         return error(FetchError.DOES_NOT_EXIST);
@@ -129,7 +128,7 @@ export class AssetService extends EventEmitter<AssetEvents> {
       }
 
       db.persist(asset);
-      return ok(this.entityToAsset(archive, asset));
+      return ok(await this.entityToAsset(archive, asset, { shallow: false }));
     });
 
     if (res.status === 'ok') {
@@ -158,7 +157,9 @@ export class AssetService extends EventEmitter<AssetEvents> {
       }
 
       if (valid.metadata) {
-        asset.metadata = valid.metadata;
+        asset.metadata = mapValues(valid.metadata, (attribute) =>
+          attribute.filter((x) => typeof x !== 'undefined')
+        );
       }
     }
 
@@ -186,19 +187,21 @@ export class AssetService extends EventEmitter<AssetEvents> {
           collection: collectionId
         },
         {
-          populate: ['mediaFiles'],
+          populate: ['collection', 'mediaFiles'],
           range
         }
       );
 
-      return {
+      const result = {
         ...entities,
         items: await Promise.all(
           entities.items.map(async (entity) =>
-            this.entityToAsset(archive, entity)
+            this.entityToAsset(archive, entity, { shallow: false })
           )
         )
       };
+
+      return result;
     });
   }
 
@@ -213,7 +216,7 @@ export class AssetService extends EventEmitter<AssetEvents> {
     { query, exact }: { query: string; exact?: boolean },
     range?: PageRange
   ): Promise<Result<ResourceList<Asset>>> {
-    return archive.useDb(async () => {
+    return archive.useDb(async (db) => {
       const collection = await this.collectionService.getCollection(
         archive,
         collectionId
@@ -231,20 +234,39 @@ export class AssetService extends EventEmitter<AssetEvents> {
         return error(FetchError.DOES_NOT_EXIST);
       }
 
+      let matchingRefs;
+      const fieldIdParam = `$.${title.id}`;
+
+      // We need to run a raw query here to filter on the metadata values due to them being embedded in arrays and
+      // therefore not being able to use the ORM's abstractions.
+      //
+      // We just take the IDs here, then get back into ORM-land as quickly as possible.
+      //
+      // We may well end up deciding that recurrent properties should be modelled relationally rather than via json
+      // arrays, but it works for now.
+      if (exact) {
+        matchingRefs = await db.execute(
+          `SELECT asset.id id FROM asset, json_each(json_extract(metadata, ?)) AS titles
+           WHERE titles.value = ? AND collection_id = ?`,
+          [fieldIdParam, query, collectionId]
+        );
+      } else {
+        const queryParam = `${query}%`;
+
+        matchingRefs = await db.execute(
+          `SELECT asset.id id FROM asset, json_each(json_extract(metadata, ?)) AS titles
+           WHERE titles.value LIKE ? AND collection_id = ?;`,
+          [fieldIdParam, queryParam, collectionId]
+        );
+      }
+
       const entities = await archive.list(
         AssetEntity,
         {
-          collection: collectionId,
-          metadata: {
-            [title.id]: exact
-              ? query
-              : {
-                  $like: `${query}%`
-                }
-          }
+          id: matchingRefs.map((ref) => ref.id)
         },
         {
-          populate: ['mediaFiles'],
+          populate: ['collection', 'mediaFiles'],
           range
         }
       );
@@ -253,21 +275,67 @@ export class AssetService extends EventEmitter<AssetEvents> {
         ...entities,
         items: await Promise.all(
           entities.items.map(async (entity) =>
-            this.entityToAsset(archive, entity)
+            this.entityToAsset(archive, entity, { shallow: false })
           )
         )
       });
     });
   }
 
-  get(archive: ArchivePackage, asset: string) {
+  /**
+   * Get a single asset by ID from the archive
+   *
+   * @param archive Archive to get asset from
+   * @param asset Id of the asset
+   * @param opts Options for fetching the asset
+   * @returns The asset represented by `id`, or undefined if it does not exist.
+   */
+  get(archive: ArchivePackage, asset: string, opts?: GetAssetOpts) {
+    return this.getMultiple(archive, [asset], opts).then((assets) => assets[0]);
+  }
+
+  /**
+   * Get a multiple assets by ID from the archive
+   *
+   * @param archive Archive to get assets from
+   * @param asset Ids of the assets to fetch
+   * @param opts Options for fetching the asset
+   * @returns Array containing any referenced assets found.
+   */
+  getMultiple(
+    archive: ArchivePackage,
+    assetIds: string[],
+    opts?: GetAssetOpts
+  ) {
     return archive
-      .get(AssetEntity, asset)
-      .then((asset) =>
-        asset ? this.entityToAsset(archive, asset) : undefined
+      .useDb((db) =>
+        db.find(
+          AssetEntity,
+          { id: assetIds },
+          {
+            populate: ['collection', 'mediaFiles']
+          }
+        )
+      )
+      .then((assets) =>
+        Promise.all(
+          assets.map((asset) => this.entityToAsset(archive, asset, opts))
+        )
       );
   }
 
+  /**
+   * Cast a value of unknown type to the type expected by the schema property.
+   *
+   * If this succeeds, the returned value is valid according to the the schema at the time of casting.
+   *
+   * This method may have side effects, such as creating new entries in a controlled database.
+   *
+   * @param archive Archive that owns `property`
+   * @param property Property value representing the expected type
+   * @param value Value to cast to the type represented by `value`
+   * @returns A result value indicating whether the cast was successful and if so, the casted value.
+   */
   castOrCreateProperty(
     archive: ArchivePackage,
     property: SchemaProperty,
@@ -280,18 +348,72 @@ export class AssetService extends EventEmitter<AssetEvents> {
     });
   }
 
-  private entityToAsset(archive: ArchivePackage, entity: AssetEntity): Asset {
-    return {
-      id: entity.id,
-      media: Array.from(entity.mediaFiles).map((file) => ({
-        id: file.id,
-        type: 'image',
-        rendition: this.mediaService.getRenditionUri(archive, file),
-        mimeType: file.mimeType
-      })),
-      metadata: entity.metadata
-    };
+  /**
+   * Convert a database entity representing to an Asset value sutable for returning to the frontend or passing to other
+   * areas of the application.
+   *
+   * This recurses into the asset's related properties and media in order to provide useful
+   *
+   * @param archive
+   * @param entity
+   * @param opts
+   * @returns
+   */
+  private entityToAsset(
+    archive: ArchivePackage,
+    entity: AssetEntity,
+    opts: GetAssetOpts | undefined
+  ) {
+    const { shallow } = opts ?? {};
+    const titleField = entity.collection.schema.find(
+      (x) => x.type === SchemaPropertyType.FREE_TEXT
+    );
+    const titleValue = titleField
+      ? entity.metadata[titleField.id]?.[0]
+      : undefined;
+
+    return archive.useDb(async (): Promise<Asset> => {
+      return {
+        id: entity.id,
+        title: typeof titleValue === 'string' ? titleValue : entity.id,
+        media: shallow
+          ? []
+          : Array.from(entity.mediaFiles).map((file) => ({
+              id: file.id,
+              type: 'image',
+              rendition: this.mediaService.getRenditionUri(archive, file),
+              mimeType: file.mimeType
+            })),
+        metadata: shallow
+          ? {}
+          : Object.fromEntries(
+              await Promise.all(
+                entity.collection.schema.map(async (property) => [
+                  property.id,
+                  await property.convertToMetadataItems(
+                    {
+                      archive,
+                      collections: this.collectionService,
+                      assets: this
+                    },
+                    entity.metadata[property.id] ?? []
+                  )
+                ])
+              )
+            )
+      };
+    });
   }
+}
+
+interface GetAssetOpts {
+  /**
+   * If false, recurse into the asset, fetching related media and metadata from the database (default is false).
+   *
+   * This will usually want to be false, except in contexts where a related property is being fetched and you want to
+   * avoid an infinite recursion.
+   **/
+  shallow?: boolean;
 }
 
 interface AssetEvents {

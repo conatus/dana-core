@@ -8,19 +8,29 @@ import { getTempfiles, getTempPackage } from '../../../test/tempfile';
 import { MediaFileService } from '../../media/media-file.service';
 import { AssetsChangedEvent, AssetService } from '../asset.service';
 import { CollectionService } from '../collection.service';
+import { assetMetadata } from '../test-utils';
 
 const SCHEMA: SchemaProperty[] = [
   {
     id: 'optionalProperty',
     label: 'Optional Property',
     type: SchemaPropertyType.FREE_TEXT,
+    repeated: false,
     required: false
   },
   {
     id: 'requiredProperty',
     label: 'Some Property',
     type: SchemaPropertyType.FREE_TEXT,
+    repeated: false,
     required: true
+  },
+  {
+    id: 'repeatedProperty',
+    label: 'Some Property',
+    type: SchemaPropertyType.FREE_TEXT,
+    repeated: true,
+    required: false
   }
 ];
 
@@ -38,9 +48,10 @@ describe(AssetService, () => {
         fixture.rootCollection.id,
         {
           metadata: {
-            requiredProperty: '1',
-            optionalProperty: '2',
-            unknownProperty: 'No'
+            requiredProperty: ['1'],
+            optionalProperty: ['2'],
+            repeatedProperty: ['3', '4'],
+            unknownProperty: ['No']
           }
         }
       )
@@ -62,10 +73,11 @@ describe(AssetService, () => {
       expect.objectContaining({
         items: [
           expect.objectContaining({
-            metadata: {
-              requiredProperty: '1',
-              optionalProperty: '2'
-            }
+            metadata: assetMetadata({
+              requiredProperty: ['1'],
+              optionalProperty: ['2'],
+              repeatedProperty: ['3', '4']
+            })
           })
         ]
       })
@@ -78,7 +90,7 @@ describe(AssetService, () => {
 
     await fixture.service.updateAsset(fixture.archive, asset.id, {
       metadata: {
-        requiredProperty: 'Replace'
+        requiredProperty: ['Replace']
       }
     });
 
@@ -97,9 +109,11 @@ describe(AssetService, () => {
       expect.objectContaining({
         items: [
           expect.objectContaining({
-            metadata: {
-              requiredProperty: 'Replace'
-            }
+            metadata: assetMetadata({
+              requiredProperty: ['Replace'],
+              optionalProperty: [],
+              repeatedProperty: []
+            })
           })
         ]
       })
@@ -134,7 +148,7 @@ describe(AssetService, () => {
         fixture.rootCollection.id,
         {
           metadata: {
-            requiredProperty: '1'
+            requiredProperty: ['1']
           }
         }
       )
@@ -161,7 +175,8 @@ describe(AssetService, () => {
             type: SchemaPropertyType.FREE_TEXT,
             id: 'dbRecord',
             label: 'Label',
-            required: false
+            required: false,
+            repeated: false
           }
         ]);
 
@@ -182,7 +197,8 @@ describe(AssetService, () => {
             type: SchemaPropertyType.FREE_TEXT,
             id: 'dbRecord',
             label: 'Label',
-            required: false
+            required: false,
+            repeated: false
           }
         ]);
 
@@ -207,13 +223,14 @@ describe(AssetService, () => {
             databaseId: db.id,
             id: 'dbRecord',
             label: 'Label',
-            required: true
+            required: true,
+            repeated: false
           }
         ]);
 
         const referencedAsset = requireSuccess(
           await fixture.service.createAsset(fixture.archive, db.id, {
-            metadata: { title: 'Value' }
+            metadata: { title: ['Value'] }
           })
         );
 
@@ -231,56 +248,64 @@ describe(AssetService, () => {
         expect(dbAssets.total).toBe(1);
         expect(res).toEqual(referencedAsset.id);
       });
-    });
 
-    test('where the target database supports it, controlled database entries are created on demand', async () => {
-      const fixture = await setup();
-      const db = await fixture.givenALabelRecordDatabase();
-      const [property] = await fixture.givenTheSchema([
-        {
-          type: SchemaPropertyType.CONTROLLED_DATABASE,
-          databaseId: db.id,
-          id: 'dbRecord',
-          label: 'Label',
-          required: true
-        }
-      ]);
+      test('where the target database supports it, controlled database entries are created on demand', async () => {
+        const fixture = await setup();
+        const db = await fixture.givenALabelRecordDatabase();
+        const [property] = await fixture.givenTheSchema([
+          {
+            type: SchemaPropertyType.CONTROLLED_DATABASE,
+            databaseId: db.id,
+            id: 'dbRecord',
+            label: 'Label',
+            required: true,
+            repeated: false
+          }
+        ]);
 
-      const res = requireSuccess(
-        await fixture.service.castOrCreateProperty(
+        const res = requireSuccess(
+          await fixture.service.castOrCreateProperty(
+            fixture.archive,
+            property,
+            'Value'
+          )
+        );
+        const dbAssets = await fixture.service.listAssets(
           fixture.archive,
-          property,
-          'Value'
-        )
-      );
-      const dbAssets = await fixture.service.listAssets(fixture.archive, db.id);
-      expect(dbAssets.total).toBe(1);
-      expect(res).toEqual(dbAssets.items[0].id);
-    });
+          db.id
+        );
+        expect(dbAssets.total).toBe(1);
+        expect(res).toEqual(dbAssets.items[0].id);
+      });
 
-    test('blank values are treated as nulls', async () => {
-      const fixture = await setup();
-      const db = await fixture.givenALabelRecordDatabase();
-      const [property] = await fixture.givenTheSchema([
-        {
-          type: SchemaPropertyType.CONTROLLED_DATABASE,
-          databaseId: db.id,
-          id: 'dbRecord',
-          label: 'Label',
-          required: true
-        }
-      ]);
+      test('blank values are treated as nulls', async () => {
+        const fixture = await setup();
+        const db = await fixture.givenALabelRecordDatabase();
+        const [property] = await fixture.givenTheSchema([
+          {
+            type: SchemaPropertyType.CONTROLLED_DATABASE,
+            databaseId: db.id,
+            id: 'dbRecord',
+            label: 'Label',
+            required: true,
+            repeated: false
+          }
+        ]);
 
-      const res = requireSuccess(
-        await fixture.service.castOrCreateProperty(
+        const res = requireSuccess(
+          await fixture.service.castOrCreateProperty(
+            fixture.archive,
+            property,
+            ' '
+          )
+        );
+        const dbAssets = await fixture.service.listAssets(
           fixture.archive,
-          property,
-          ' '
-        )
-      );
-      const dbAssets = await fixture.service.listAssets(fixture.archive, db.id);
-      expect(dbAssets.total).toBe(0);
-      expect(res).toBeUndefined();
+          db.id
+        );
+        expect(dbAssets.total).toBe(0);
+        expect(res).toBeUndefined();
+      });
     });
   });
 });
@@ -327,7 +352,8 @@ async function setup() {
             id: 'title',
             type: SchemaPropertyType.FREE_TEXT,
             label: 'Title',
-            required: true
+            required: true,
+            repeated: false
           }
         ]
       });

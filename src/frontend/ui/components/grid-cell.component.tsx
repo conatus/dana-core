@@ -1,52 +1,43 @@
 /** @jsxImportSource theme-ui */
 
-import {
-  GetAsset,
-  GetCollection,
-  GetRootAssetsCollection,
-  GetRootDatabaseCollection,
-  SchemaPropertyType
-} from '../../../common/asset.interfaces';
-import { assert } from '../../../common/util/assert';
-import { SKIP_FETCH, unwrapGetResult, useGet } from '../../ipc/ipc.hooks';
+import { AssetMetadataItem } from '../../../common/asset.interfaces';
 import { ProgressIndicator, ProgressValue } from './atoms.component';
 import { DataGridCell } from './grid.component';
 
-/** Datagrid cell for free text */
-export const TextCell: DataGridCell<string> = ({ value }) => <>{value}</>;
+/** Datagrid cell for raw strings */
+export const StringCell: DataGridCell<string> = ({ value }) => <>{value}</>;
 
-TextCell.width = (data, fontSize) =>
-  Math.max(100, Math.min(600, data ? data.length * fontSize * 0.4 : 300));
+StringCell.width = (value, fontSize) => guessTextWidth(value, fontSize);
+
+/** For any schema property, render its semicolon-delimited presentation value */
+export const MetadataItemCell: DataGridCell<AssetMetadataItem> = ({
+  value
+}) => <>{presentationValue(value)}</>;
+
+MetadataItemCell.width = (data, fontSize) =>
+  guessTextWidth(presentationValue(data), fontSize);
 
 /** Datagrid cell for indicating progress */
-export const ProgressCell: DataGridCell<ProgressValue> = ({ value }) => (
-  <div sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-    <ProgressIndicator value={value} />
-  </div>
-);
+export const ProgressCell: DataGridCell<ProgressValue> = ({ value }) => {
+  return (
+    <div
+      sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}
+    >
+      <ProgressIndicator value={value} />
+    </div>
+  );
+};
 
 ProgressCell.width = 36;
 
-/** Datagrid cell for database references */
-export const ReferenceCell: DataGridCell<string> = ({ value, property }) => {
-  const asset = unwrapGetResult(useGet(GetAsset, value ?? SKIP_FETCH));
-  const collection = unwrapGetResult(useGet(GetRootAssetsCollection));
-  const propertyValue = collection?.schema.find((x) => x.id === property);
-
-  const dbId =
-    propertyValue?.type == SchemaPropertyType.CONTROLLED_DATABASE
-      ? propertyValue.databaseId
-      : undefined;
-  const dbSchema = unwrapGetResult(useGet(GetCollection, dbId ?? SKIP_FETCH));
-
-  if (!dbSchema || !asset) {
-    return null;
+const presentationValue = (val?: AssetMetadataItem) => {
+  if (!val || val.presentationValue.length === 0) {
+    return '-';
   }
 
-  const titleProp = dbSchema.schema[0]?.id;
-
-  return <>{asset.metadata[titleProp]}</>;
+  return val.presentationValue.map((x) => x.label).join('; ');
 };
 
-ReferenceCell.width = (data, fontSize) =>
-  Math.max(100, Math.min(600, data ? data.length * fontSize * 0.4 : 300));
+export const guessTextWidth = (text: string | undefined, fontSize: number) => {
+  return Math.max(36, Math.min(600, text ? text.length * fontSize * 0.8 : 500));
+};

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /** @jsxImportSource theme-ui */
 
 import {
@@ -13,7 +14,9 @@ import {
   useRef,
   useState
 } from 'react';
-import AutoSizer, { Size } from 'react-virtualized-auto-sizer';
+import { take } from 'streaming-iterables';
+import produce from 'immer';
+import AutoSizer from 'react-virtualized-auto-sizer';
 import Loader from 'react-window-infinite-loader';
 import { ListChildComponentProps, FixedSizeList } from 'react-window';
 import { Box, BoxProps, ThemeUIStyleObject, useThemeUI } from 'theme-ui';
@@ -24,15 +27,14 @@ import { compact, last, max, noop, sum } from 'lodash';
 import { useEventEmitter } from '../hooks/state.hooks';
 import { SelectionContext } from '../hooks/selection.hooks';
 import { PageRange } from '../../../common/ipc.interfaces';
-import { take } from 'streaming-iterables';
-import produce from 'immer';
+import { guessTextWidth } from './grid-cell.component';
 
 export interface DataGridProps<T extends Resource> extends BoxProps {
   /** Data to present */
   data: ListCursor<T>;
 
   /** Specification of the grid columns */
-  columns: GridColumn<T>[];
+  columns: GridColumn<T, any>[];
 
   /** Font size used to size grid rows and set their inner font size */
   fontSize?: number;
@@ -84,7 +86,10 @@ export function DataGrid<T extends Resource>({
 
         if (typeof width === 'function') {
           return (
-            max(dataSample.map((x) => width(col.getData(x), fontSize))) ?? 100
+            max([
+              guessTextWidth(col.label, fontSize),
+              ...dataSample.map((x) => width(col.getData(x), fontSize))
+            ]) ?? 100
           );
         }
 
@@ -242,7 +247,7 @@ export function DataGrid<T extends Resource>({
  * Specify data access and presentation for a grid row.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export interface GridColumn<T extends Resource = Resource, Val = any> {
+export interface GridColumn<T = unknown, Val = any> {
   /** Unique id of the column */
   id: string;
 
@@ -258,7 +263,7 @@ export interface GridColumn<T extends Resource = Resource, Val = any> {
 
 /** Presentation component for a datagrid */
 export type DataGridCell<Val = unknown> = FC<{
-  value: Val;
+  value?: Val;
   property: string;
 }> & {
   /**
