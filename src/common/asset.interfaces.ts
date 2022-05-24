@@ -108,7 +108,11 @@ export type AggregatedValidationError = z.TypeOf<
 export const ReferentialIntegrityError = z.array(
   z.object({
     assetId: z.string(),
-    collectionId: z.string()
+    assetTitle: z.string().optional(),
+    collectionId: z.string(),
+    collectionTitle: z.string(),
+    propertyId: z.string(),
+    propertyLabel: z.string()
   })
 );
 export type ReferentialIntegrityError = z.TypeOf<
@@ -294,7 +298,7 @@ export const CreateAsset = RpcInterface({
 });
 
 /**
- * Create a new asset.
+ * Search for an asset by part of its title.
  */
 export const SearchAsset = RpcInterface({
   id: 'assets/search',
@@ -304,6 +308,18 @@ export const SearchAsset = RpcInterface({
   }),
   response: ResourceList(Asset),
   error: z.nativeEnum(FetchError)
+});
+
+/**
+ * Delete one or more assets.
+ */
+export const DeleteAssets = RpcInterface({
+  id: 'assets/delete',
+  request: z.object({
+    assetIds: z.array(z.string())
+  }),
+  response: z.object({}),
+  error: z.nativeEnum(FetchError).or(ReferentialIntegrityError)
 });
 
 /**

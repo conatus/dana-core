@@ -287,6 +287,31 @@ export class CollectionService extends EventEmitter<CollectionEvents> {
   }
 
   /**
+   * For a given collection, return all the properties (and their collection instance) that reference it.
+   *
+   * @param archive Archive containing the collection
+   * @param referencedCollectionId Collection to check for referencing properties
+   * @returns Object of { property, collection } values for each referencing property
+   */
+  async findPropertiesReferencingCollection(
+    archive: ArchivePackage,
+    referencedCollectionId: string
+  ) {
+    const allCollections = await archive.useDb((db) =>
+      db.find(AssetCollectionEntity, {})
+    );
+
+    return allCollections.flatMap((collection) => {
+      return collection.schema
+        .filter(
+          (property) =>
+            property.referencedCollectionId() === referencedCollectionId
+        )
+        .map((property) => ({ property, collection }));
+    });
+  }
+
+  /**
    * Validate a that a proposed addition into the archive is valid according to a schema.
    *
    * @param archive Archive containing the schema.

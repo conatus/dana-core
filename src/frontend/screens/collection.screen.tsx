@@ -3,6 +3,7 @@
 import { FC, useCallback, useMemo, useState } from 'react';
 import {
   Asset,
+  DeleteAssets,
   GetCollection,
   ListAssets,
   SchemaProperty
@@ -13,7 +14,8 @@ import {
   ListCursor,
   unwrapGetResult,
   useGet,
-  useList
+  useList,
+  useRPC
 } from '../ipc/ipc.hooks';
 import { DataGrid, GridColumn } from '../ui/components/grid.component';
 import { AssetDetail } from '../ui/components/asset-detail.component';
@@ -27,16 +29,19 @@ import { useContextMenu } from '../ui/hooks/menu.hooks';
 import { IconButton } from 'theme-ui';
 import { Gear, Plus } from 'react-bootstrap-icons';
 import { MetadataItemCell } from '../ui/components/grid-cell.component';
+import { useErrorDisplay } from '../ui/hooks/error.hooks';
+import { useModal } from '../ui/hooks/modal.hooks';
 
 /**
  * Screen for viewing the assets in a collection.
  */
 export const CollectionScreen: FC = () => {
+  const navigate = useNavigate();
+
   const collectionId = required(
     useParams().collectionId,
     'Expected collectionId param'
   );
-  const navigate = useNavigate();
   const collection = unwrapGetResult(useGet(GetCollection, collectionId));
   const fetchedAssets = useList(
     ListAssets,
@@ -45,6 +50,8 @@ export const CollectionScreen: FC = () => {
   );
   const selection = SelectionContext.useContainer();
   const [pendingAsset, setPendingAsset] = useState<Asset>();
+
+  const assetContextMenu = useAssetContextMenu();
 
   const assets = useMemo((): ListCursor<Asset> | undefined => {
     if (!fetchedAssets) {
@@ -138,6 +145,7 @@ export const CollectionScreen: FC = () => {
           sx={{ flex: 1, width: '100%' }}
           columns={gridColumns}
           data={assets}
+          contextMenuItems={assetContextMenu}
         />
 
         <BottomBar
@@ -172,3 +180,121 @@ const getGridColumns = (schema: SchemaProperty[]) =>
       label: property.label
     };
   });
+
+const useAssetContextMenu = () => {
+  const errorDisplay = useErrorDisplay();
+  const rpc = useRPC();
+  const modal = useModal();
+
+  return useCallback(
+    (assetIds: string[]) => [
+      assetIds.length > 0 && {
+        id: 'delete',
+        label: 'Delete',
+        action: async () => {
+          const confirmed = await modal.confirm({
+            title: 'Are you sure?',
+            message: (
+              <>
+                <div style={{ paddingBottom: '0.5em' }}>
+                  Are you sure you want to delete{' '}
+                  {assetIds.length === 1 ? 'this record' : 'these records'}?
+                </div>
+
+                <div style={{ paddingBottom: '0.5em' }}>
+                  Deleting a record is permanent. You won't be able to undo this
+                  if you confirm.
+                </div>
+              </>
+            ),
+            confirmButtonLabel:
+              assetIds.length > 1
+                ? `Delete ${assetIds.length} records`
+                : 'Delete record'
+          });
+          if (!confirmed) {
+            return;
+          }
+
+          const res = await rpc(DeleteAssets, { assetIds });
+
+          if (res.status === 'error') {
+            if (typeof res.error === 'object') {
+              errorDisplay(
+                <>
+                  <div sx={{ pb: 2 }}>
+                    The records selected cannot be deleted right now due for the
+                    following {res.error.length === 1 ? 'reason' : 'reasons'}:
+                  </div>
+
+                  <div style={{ userSelect: 'text', overflow: 'auto' }}>
+                    <ul>
+                      {res.error.map(
+                        ({
+                          assetId,
+                          assetTitle,
+                          collectionTitle,
+                          propertyLabel,
+                          propertyId
+                        }) => {
+                          const displayedTitle = assetTitle ? (
+                            <>
+                              Record <strong>{assetTitle}</strong>
+                            </>
+                          ) : (
+                            'A record'
+                          );
+
+                          return (
+                            <li key={assetId + '.' + propertyId}>
+                              <div style={{ paddingBottom: '0.5em' }}>
+                                {displayedTitle} in collection{' '}
+                                <strong>{collectionTitle}</strong> has this
+                                record as its <strong>{propertyLabel}</strong>{' '}
+                                property.
+                              </div>
+                              <div style={{ paddingBottom: '0.5em' }}>
+                                Deleting it would mean that{' '}
+                                <strong>{propertyLabel}</strong> is blank, which
+                                is not allowed by the schema.
+                              </div>
+                              <div style={{ paddingBottom: '0.5em' }}>
+                                Either delete {displayedTitle} as well, or chage
+                                its <strong>{propertyLabel}</strong> property to
+                                something else.
+                              </div>
+                              (record id:{' '}
+                              <code style={{ userSelect: 'all' }}>
+                                {assetId}
+                              </code>
+                              )
+                            </li>
+                          );
+                        }
+                      )}
+                    </ul>
+                  </div>
+                </>
+              );
+            } else {
+              errorDisplay.unexpected(res.error);
+            }
+
+            return;
+          }
+        }
+      }
+    ],
+    [errorDisplay, modal, rpc]
+  );
+};
+
+const getAssetTitleOrId = (asset: Asset) => {
+  if (asset.title) {
+    return (
+      <>
+        Record <strong>{asset.title || asset.id}</strong>
+      </>
+    );
+  }
+};
