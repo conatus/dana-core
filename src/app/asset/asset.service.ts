@@ -372,18 +372,18 @@ export class AssetService extends EventEmitter<AssetEvents> {
       ? entity.metadata[titleField.id]?.[0]
       : undefined;
 
-    return archive.useDb(async (): Promise<Asset> => {
+    return archive.useDb(async (db): Promise<Asset> => {
+      await db.populate(entity, ['mediaFiles']);
+
       return {
         id: entity.id,
         title: typeof titleValue === 'string' ? titleValue : entity.id,
         media: shallow
           ? []
-          : Array.from(entity.mediaFiles).map((file) => ({
-              id: file.id,
-              type: 'image',
-              rendition: this.mediaService.getRenditionUri(archive, file),
-              mimeType: file.mimeType
-            })),
+          : await this.mediaService.getMedia(
+              archive,
+              entity.mediaFiles.getIdentifiers()
+            ),
         metadata: shallow
           ? {}
           : Object.fromEntries(
