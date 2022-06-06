@@ -84,29 +84,55 @@ export async function initIngest(
     );
   });
 
-  router.bindArchiveRpc(StartIngest, async (archive, { basePath }) => {
-    if (!basePath) {
-      // Electron's types are wrong – it's fine for this to be undefined
-      const openRes = await dialog.showOpenDialog(
-        undefined as unknown as BrowserWindow,
-        {
-          title: 'Import assets',
-          message: 'Select a directory of assets and metadata to import',
-          properties: ['openDirectory'],
-          buttonLabel: 'Import'
-        }
-      );
-
-      basePath = openRes.filePaths[0];
+  router.bindArchiveRpc(
+    StartIngest,
+    async (archive, { basePath, targetCollectionId }) => {
+      const createFilter = (label: string, exts: string[]) => {
+        return {
+          name: `${label} (${exts.join(', ')})`,
+          extensions: exts.map((ext) => ext.replace(/^\./, ''))
+        };
+      };
 
       if (!basePath) {
-        return error(StartIngestError.CANCELLED);
-      }
-    }
+        // Electron's types are wrong – it's fine for this to be undefined
+        const openRes = await dialog.showOpenDialog(
+          undefined as unknown as BrowserWindow,
+          {
+            title: 'Import assets',
+            message: 'Select a directory of assets and metadata to import',
+            filters: [
+              createFilter('Any format', [
+                AssetIngestService.PACKAGE_TYPE,
+                ...AssetIngestService.SPREADSHEET_TYPES
+              ]),
+              createFilter(
+                'Metadata listing',
+                AssetIngestService.SPREADSHEET_TYPES
+              ),
+              createFilter('Dana asset package', [
+                AssetIngestService.PACKAGE_TYPE
+              ])
+            ],
+            buttonLabel: 'Import'
+          }
+        );
 
-    const session = await assetIngest.beginSession(archive, basePath);
-    return ok(session);
-  });
+        basePath = openRes.filePaths[0];
+
+        if (!basePath) {
+          return error(StartIngestError.CANCELLED);
+        }
+      }
+
+      const session = await assetIngest.beginSession(
+        archive,
+        basePath,
+        targetCollectionId
+      );
+      return ok(session);
+    }
+  );
 
   router.bindArchiveRpc(ListIngestSession, async (archive) => {
     const sessions = assetIngest.listSessions(archive);

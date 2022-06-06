@@ -5,7 +5,7 @@ import { IngestPhase, IngestedAsset } from '../../common/ingest.interfaces';
 import { PageRange } from '../../common/ipc.interfaces';
 import { ResourceList } from '../../common/resource';
 import { DefaultMap } from '../../common/util/collection';
-import { ok } from '../../common/util/error';
+import { error, FetchError, ok } from '../../common/util/error';
 import { AssetService } from '../asset/asset.service';
 import { CollectionService } from '../asset/collection.service';
 import { MediaFileService } from '../media/media-file.service';
@@ -14,6 +14,12 @@ import { AssetImportEntity, ImportSessionEntity } from './asset-import.entity';
 import { AssetIngestOperation } from './asset-ingest.operation';
 
 export class AssetIngestService extends EventEmitter<Events> {
+  /** Supported file extensions for metadata sheets */
+  static readonly SPREADSHEET_TYPES = ['.xlsx', '.csv', '.xls', '.ods'];
+
+  /** Supported file extension for a dana package */
+  static readonly PACKAGE_TYPE = '.danapack';
+
   constructor(
     private mediaService: MediaFileService,
     private assetService: AssetService,
@@ -64,13 +70,18 @@ export class AssetIngestService extends EventEmitter<Events> {
    * @param archive Archive to import files into.
    * @param basePath Absolute path to the local directory to ingest from.
    */
-  async beginSession(archive: ArchivePackage, basePath: string) {
+  async beginSession(
+    archive: ArchivePackage,
+    basePath: string,
+    targetCollectionId: string
+  ) {
     const session = this.openSession(
       archive,
 
-      await archive.useDb((em) => {
+      await archive.useDb(async (em) => {
         const session = em.create(ImportSessionEntity, {
           basePath,
+          targetCollection: targetCollectionId,
           phase: IngestPhase.READ_METADATA,
           valid: true
         });
@@ -163,9 +174,10 @@ export class AssetIngestService extends EventEmitter<Events> {
    * @param sessionId Id of the session to return.
    */
   async commitSession(archive: ArchivePackage, sessionId: string) {
-    const collection = await this.collectionService.getRootAssetCollection(
-      archive
-    );
+    const session = this.getSession(archive, sessionId);
+    if (!session) {
+      return error(FetchError.DOES_NOT_EXIST);
+    }
 
     const res = await archive.useDbTransaction(async (db) => {
       const assets = await db.find(AssetImportEntity, { session: sessionId });
@@ -177,7 +189,7 @@ export class AssetIngestService extends EventEmitter<Events> {
 
         const createResult = await this.assetService.createAsset(
           archive,
-          collection.id,
+          session.targetCollectionId,
           {
             metadata: assetImport.metadata,
             media: compact(
@@ -211,25 +223,9 @@ export class AssetIngestService extends EventEmitter<Events> {
       return;
     }
 
-    // Stop any pending activity in the session
+    // Stop any pending activity in the session and return the archive to its initial state
     await session.teardown();
-
-    // Delete the import, returning any imported media
-    const importedMedia = await archive.useDbTransaction(async (db) => {
-      const importedMedia = await archive.useDb((db) =>
-        session
-          .queryImportedFiles(db)
-          .populate([{ field: 'media' }])
-          .getResultList()
-      );
-
-      db.remove(db.getReference(ImportSessionEntity, sessionId));
-
-      return compact(importedMedia.map((file) => file.media?.id));
-    });
-
-    // Delete the imported media
-    await this.mediaService.deleteFiles(archive, importedMedia);
+    await session.removeImportedFiles();
 
     await this.closeSession(archive, sessionId);
   }

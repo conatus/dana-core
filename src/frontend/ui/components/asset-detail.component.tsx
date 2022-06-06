@@ -19,13 +19,11 @@ import {
   Collection,
   CollectionType,
   CreateAsset,
-  SchemaProperty,
   SingleValidationError,
   UpdateAssetMetadata
 } from '../../../common/asset.interfaces';
 import { UpdateIngestedMetadata } from '../../../common/ingest.interfaces';
 import { FetchError } from '../../../common/util/error';
-import { Dict } from '../../../common/util/types';
 import { useRPC } from '../../ipc/ipc.hooks';
 import { useErrorDisplay } from '../hooks/error.hooks';
 import { Tabs, IconTab, ValidationError } from './atoms.component';
@@ -68,7 +66,7 @@ export const AssetDetail: FC<MediaDetailProps> = ({
   ...props
 }) => {
   const showMedia =
-    collection.type === CollectionType.ASSET_COLLECTION && action === 'update';
+    collection.type === CollectionType.ASSET_COLLECTION && action !== 'create';
   const [tabId, setTabId] = useState(
     initialTab || (showMedia && 'Media') || undefined
   );
@@ -128,8 +126,9 @@ export const AssetDetail: FC<MediaDetailProps> = ({
     } else {
       setEdits(undefined);
       setEditErrors(undefined);
+      onCreate?.(res.value);
     }
-  }, [collection.id, displayError, metadata, rpc]);
+  }, [collection.id, displayError, metadata, onCreate, rpc]);
 
   /** Update the metadata for an imported asset */
   const updateIngestedAsset = useCallback(async () => {

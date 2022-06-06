@@ -2,11 +2,10 @@
 
 import { FC, useCallback, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Button } from 'theme-ui';
+import { Button, Flex, Text } from 'theme-ui';
 import {
   Asset,
-  AssetMetadataItem,
-  GetRootAssetsCollection,
+  GetCollection,
   SchemaProperty
 } from '../../common/asset.interfaces';
 import {
@@ -18,7 +17,14 @@ import {
   CancelIngestSession
 } from '../../common/ingest.interfaces';
 import { required } from '../../common/util/assert';
-import { iterateListCursor, useGet, useList, useRPC } from '../ipc/ipc.hooks';
+import {
+  iterateListCursor,
+  SKIP_FETCH,
+  unwrapGetResult,
+  useGet,
+  useList,
+  useRPC
+} from '../ipc/ipc.hooks';
 import { ProgressValue } from '../ui/components/atoms.component';
 import {
   MetadataItemCell,
@@ -36,9 +42,11 @@ import { BottomBar } from '../ui/components/page-layouts.component';
 export const ArchiveIngestScreen: FC = () => {
   const sessionId = required(useParams().sessionId, 'Expected sessionId param');
   const assets = useList(ListIngestAssets, () => ({ sessionId }), [sessionId]);
-  const session = useGet(GetIngestSession, sessionId);
-  const collection = useGet(GetRootAssetsCollection);
-  const completeImport = useCompleteImport(sessionId);
+  const session = unwrapGetResult(useGet(GetIngestSession, sessionId));
+  const collection = unwrapGetResult(
+    useGet(GetCollection, session?.targetCollectionId ?? SKIP_FETCH)
+  );
+  const completeImport = useCompleteImport(sessionId, collection?.id);
   const cancelImport = useCancelImport(sessionId);
   const selection = SelectionContext.useContainer();
   const selectedAsset = useMemo(() => {
@@ -50,23 +58,23 @@ export const ArchiveIngestScreen: FC = () => {
   }, [assets, selection]);
 
   const gridColumns = useMemo(() => {
-    if (collection?.status === 'ok') {
-      return getGridColumns(collection.value.schema);
+    if (collection) {
+      return getGridColumns(collection.schema);
     }
 
     return [];
   }, [collection]);
 
-  if (!assets || !session || !collection || collection.status !== 'ok') {
+  if (!assets || !session || !collection) {
     return null;
   }
-
+  1;
   const detailView =
-    selectedAsset && collection.status === 'ok' ? (
+    selectedAsset && collection ? (
       <AssetDetail
         asset={selectedAsset}
         sx={{ width: '100%', height: '100%' }}
-        collection={collection.value}
+        collection={collection}
         errors={selectedAsset.validationErrors ?? undefined}
         sessionId={sessionId}
         action="import"
@@ -74,9 +82,7 @@ export const ArchiveIngestScreen: FC = () => {
     ) : undefined;
 
   const allowComplete =
-    session.status === 'ok' &&
-    session.value.valid &&
-    session.value.phase === IngestPhase.COMPLETED;
+    session.valid && session.phase === IngestPhase.COMPLETED;
 
   return (
     <>
@@ -84,8 +90,14 @@ export const ArchiveIngestScreen: FC = () => {
         sx={{ flex: 1, width: '100%', position: 'relative' }}
         detail={detailView}
       >
+        <Flex sx={{ py: 5, px: 4, bg: 'gray1', flexDirection: 'column' }}>
+          <Text sx={{ fontSize: 1 }}>
+            Importing from <strong>{session.title}</strong> into{' '}
+            <strong>{collection.title}</strong>
+          </Text>
+        </Flex>
         <DataGrid
-          sx={{ flex: 1, width: '100%', height: '100%' }}
+          sx={{ flex: 1, width: '100%', height: '100%', borderTop: 'light' }}
           columns={gridColumns}
           data={assets}
         />
@@ -113,7 +125,10 @@ export const ArchiveIngestScreen: FC = () => {
  * @param sessionId The import session to commit
  * @returns An event handler that commits the import.
  */
-function useCompleteImport(sessionId: string) {
+function useCompleteImport(
+  sessionId: string,
+  collectionId: string | undefined
+) {
   const rpc = useRPC();
   const navigate = useNavigate();
 
@@ -124,14 +139,10 @@ function useCompleteImport(sessionId: string) {
       return;
     }
 
-    const collection = await rpc(GetRootAssetsCollection, {});
-
-    navigate(
-      collection.status === 'ok' ? `/collection/${collection.value.id}` : '/'
-    );
+    navigate(`/collection/${collectionId}`);
 
     return;
-  }, [navigate, rpc, sessionId]);
+  }, [collectionId, navigate, rpc, sessionId]);
 }
 
 /**
