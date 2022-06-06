@@ -1,5 +1,13 @@
 import { randomUUID } from 'crypto';
-import { app, BrowserWindow, ipcMain, Menu, protocol, session } from 'electron';
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  Menu,
+  protocol,
+  session
+} from 'electron';
 import EventEmitter from 'eventemitter3';
 import { uniqueId } from 'lodash';
 import { platform } from 'os';
@@ -20,9 +28,13 @@ import {
   ShowContextMenu,
   ShowContextMenuResult,
   ShowModal,
-  CloseModal
+  ReturnModalValue,
+  ShowFilePickerModal,
+  CreateWindow,
+  WindowSize
 } from '../../common/ui.interfaces';
 import { error, ok } from '../../common/util/error';
+import { MediaFileService } from '../media/media-file.service';
 import { getFrontendPlatform } from '../util/platform';
 import {
   FRONTEND_BUNDLE_DIR,
@@ -44,7 +56,7 @@ interface CreateFrontendWindow {
     'platform' | 'windowId' | 'version' | 'releaseDate'
   >;
 
-  size?: 'small' | 'regular' | 'dialog';
+  size?: WindowSize;
 
   /** Resolve `media:` url schemes to an absolute path */
   resolveMedia?: MediaResolveFn;
@@ -59,7 +71,7 @@ type MediaResolveFn = (uri: string) => string;
 export async function createFrontendWindow({
   title,
   config,
-  size = 'regular',
+  size = WindowSize.REGULAR,
   resolveMedia,
   router
 }: CreateFrontendWindow) {
@@ -86,6 +98,18 @@ export async function createFrontendWindow({
       return {
         height: 300,
         width: 300,
+        minWidth: 300,
+        minHeight: 300,
+        resizable: false,
+        minimizable: false,
+        maximizable: false
+      };
+    }
+
+    if (size === 'narrow') {
+      return {
+        height: 600,
+        width: 400,
         minWidth: 300,
         minHeight: 300,
         resizable: false,
@@ -221,7 +245,9 @@ function showWindowAfterFirstRender(
         // Showing devtools immediately after loading the window seems to break devtools and result in a blank pane.
         // Wait for a few seconds before opening in order to keep electron happy.
         setTimeout(() => {
-          window.webContents.openDevTools();
+          if (!window.isDestroyed()) {
+            window.webContents.openDevTools();
+          }
         }, 2000);
       }
     };
@@ -321,10 +347,10 @@ export async function initWindows(router: ElectronRouter) {
 
   router.bindRpc(ShowModal, async (req, documentId) => {
     const returnId = randomUUID();
-    const window = await createFrontendWindow({
+    await createFrontendWindow({
       title: req.title,
       router,
-      size: 'dialog',
+      size: WindowSize.DIALOG,
       config: {
         type: 'modal',
         documentId,
@@ -342,13 +368,12 @@ export async function initWindows(router: ElectronRouter) {
 
     return new Promise((resolve) => {
       visibleModals.once(returnId, ({ action }) => {
-        window.close();
         resolve(ok({ action }));
       });
     });
   });
 
-  router.bindRpc(CloseModal, async (req) => {
+  router.bindRpc(ReturnModalValue, async (req) => {
     visibleModals.emit(req.returnId, { action: req.action });
     return ok();
   });
@@ -359,4 +384,42 @@ export async function initWindows(router: ElectronRouter) {
       ? ok<MaximizationState>(getMaximizationState(window))
       : error('UNKNOWN_WINDOW');
   });
+
+  router.bindRpc(ShowFilePickerModal, async (req, _2, _3, contents) => {
+    const window = BrowserWindow.fromWebContents(contents);
+    if (!window) {
+      return error('UNKNOWN_WINDOW');
+    }
+
+    const res = await dialog.showOpenDialog(window, {
+      buttonLabel: req.confirmButtonLabel,
+      filters: req.filters,
+      message: req.message,
+      title: req.title
+    });
+
+    return ok(res.canceled ? undefined : res.filePaths);
+  });
+
+  router.bindArchiveRpc(
+    CreateWindow,
+    async (archive, { title, path, size = WindowSize.REGULAR }) => {
+      const window = await createFrontendWindow({
+        title,
+        router,
+        size,
+        resolveMedia: (uri) =>
+          MediaFileService.resolveRenditionUri(archive, uri),
+        config: {
+          type: 'archive',
+          documentId: archive.id,
+          initialPath: path
+        }
+      });
+
+      router.addWindow(window.webContents, archive.id);
+
+      return ok();
+    }
+  );
 }

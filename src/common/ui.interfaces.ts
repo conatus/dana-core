@@ -1,7 +1,8 @@
-import { z } from 'zod';
+import { string, z } from 'zod';
 import {
   ErrorType,
   EventInterface,
+  RequestType,
   ResponseType,
   RpcInterface
 } from './ipc.interfaces';
@@ -45,8 +46,22 @@ export const ShowModal = RpcInterface({
   })
 });
 
-export const CloseModal = RpcInterface({
-  id: 'window/close-modal',
+export const ShowFilePickerModal = RpcInterface({
+  id: 'window/show-file-picker',
+  request: z.object({
+    title: z.string(),
+    message: z.string(),
+    confirmButtonLabel: z.string().optional(),
+    filters: z
+      .object({ extensions: z.string().array(), name: z.string() })
+      .array()
+      .optional()
+  }),
+  response: z.string().array().optional()
+});
+
+export const ReturnModalValue = RpcInterface({
+  id: 'window/return-model-value',
   request: z.object({
     returnId: z.string(),
     action: z.enum(['confirm', 'cancel'])
@@ -78,3 +93,22 @@ export type ShowContextMenuResult = Result<
   ShowContextMenuResponse,
   ShowContextMenuError
 >;
+
+export enum WindowSize {
+  SMALL = 'small',
+  NARROW = 'narrow',
+  REGULAR = 'regular',
+  DIALOG = 'dialog'
+}
+
+export const CreateWindow = RpcInterface({
+  id: 'window/create',
+  request: z.object({
+    title: z.string(),
+    path: z.string(),
+    size: z.nativeEnum(WindowSize).optional()
+  }),
+  response: z.unknown()
+});
+
+export type CreateWindowOpts = RequestType<typeof CreateWindow>;
