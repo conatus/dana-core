@@ -14,7 +14,7 @@ const getCerts = () => {
   }
 };
 
-execSync(`yarn electron-builder --publish onTagOrDraft`, {
+execSync(`yarn electron-builder --publish always`, {
   encoding: 'utf8',
   stdio: 'inherit',
   env: {
