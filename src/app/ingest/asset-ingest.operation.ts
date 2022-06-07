@@ -1,12 +1,10 @@
 import path, { basename, dirname, extname, join } from 'path';
-import { z } from 'zod';
 import * as xlsx from 'xlsx';
 import * as SecureJSON from 'secure-json-parse';
 import { Logger } from 'tslog';
 import { compact, keyBy, mapValues } from 'lodash';
 import { ObjectQuery } from '@mikro-orm/core';
 import { SqlEntityManager } from '@mikro-orm/sqlite';
-import AdmZip from 'adm-zip';
 
 import {
   IngestError,
@@ -29,6 +27,7 @@ import { AssetService } from '../asset/asset.service';
 import { error, FetchError, ok } from '../../common/util/error';
 import { arrayify } from '../../common/util/collection';
 import { required } from '../../common/util/assert';
+import { MetadataFileSchema, DanaPack, openDanapack } from './danapack';
 
 /**
  * Encapsulates an import operation.
@@ -227,7 +226,7 @@ export class AssetIngestOperation implements IngestSession {
   async readPackageMetadata() {
     this.log.info('Reading metadata package', this.basePath);
 
-    const archive = this.openAsDanapack();
+    const archive = openDanapack(this.basePath);
 
     if (!archive.metadataEntry) {
       await this.archive.useDb((db) => {
@@ -268,7 +267,9 @@ export class AssetIngestOperation implements IngestSession {
     }
 
     for (const [key, val] of Object.entries(metadata.data.assets)) {
-      await this.readMetadataObject(val.metadata, val.files ?? [], key);
+      await this.readMetadataObject(val.metadata, val.files ?? [], key, {
+        convert: !metadata.data.collection
+      });
     }
   }
 
@@ -310,11 +311,15 @@ export class AssetIngestOperation implements IngestSession {
   async readMetadataObject(
     metadata: Dict<unknown[]>,
     files: string[],
-    locator: string
+    locator: string,
+    { convert = true }: { convert?: boolean } = {}
   ) {
     const collection = await this.getTargetCollection();
-    const convertToSchema = this.getMetadataConverter(collection.schema);
-    metadata = await convertToSchema(metadata);
+
+    if (convert) {
+      const convertToSchema = this.getMetadataConverter(collection.schema);
+      metadata = await convertToSchema(metadata);
+    }
 
     await this.archive.useDbTransaction(async (db) => {
       const assetsRepository = db.getRepository(AssetImportEntity);
@@ -378,15 +383,23 @@ export class AssetIngestOperation implements IngestSession {
   async convertTypeForImport(property: SchemaProperty, value: unknown) {
     return Promise.all(
       arrayify(value).map(async (val) => {
-        const castedValue = await this.assetService.castOrCreateProperty(
+        const castedValue = await this.assetService.castOrCreatePropertyValue(
           this.archive,
           property,
           val
         );
 
-        return castedValue.status === 'error' ? val : castedValue.value;
+        if (castedValue.status === 'error') {
+          return [val];
+        }
+
+        if (castedValue.value === undefined) {
+          return [];
+        }
+
+        return [castedValue.value];
       })
-    );
+    ).then((x) => x.flat());
   }
 
   /**
@@ -474,7 +487,7 @@ export class AssetIngestOperation implements IngestSession {
       return;
     }
 
-    const pack = this.openAsDanapack();
+    const pack = openDanapack(this.basePath);
 
     await this.archive.useDb(async (db) => {
       const assetsRepository = db.getRepository(AssetImportEntity);
@@ -532,7 +545,7 @@ export class AssetIngestOperation implements IngestSession {
         }
 
         try {
-          const packEntry = pack.entries[join('media', file.path)];
+          const packEntry = pack.getMedia(file.path);
           const res = await this.mediaService.putFile(this.archive, {
             extension: extname(file.path),
             extractTo: (dest) => {
@@ -678,73 +691,4 @@ export class AssetIngestOperation implements IngestSession {
     await this.revalidate();
     this.emitStatus();
   };
-
-  /**
-   * Open the `baseUrl` of this import as a DanaPack file
-   *
-   * @returns DanaPack instance.
-   */
-  private openAsDanapack() {
-    const zip = new AdmZip(this.basePath);
-    const entries = Object.fromEntries(
-      zip
-        .getEntries()
-        .map((e) => [join(...e.entryName.split(path.sep).slice(1)), e])
-    ) as Dict<AdmZip.IZipEntry>;
-
-    return {
-      zipFile: zip,
-      metadataEntry: entries['metadata.json'],
-      entries
-    };
-  }
 }
-
-/**
- * A DanaPack file is a zipped bundle of asset metadata and media files with a defined internal file structure.
- *
- * It must have the extension `.danapack` to be used by Dana Core.
- *
- * The archive structure is as follows:
- *
- * ```
- * + [root directory]
- *   - metadata.json
- *   + media
- *     - file1
- *     - file2
- *     ...
- * ```
- * The root directory may have any name, but must be present. The metadata.json and media entries should not be at the
- * root of the archive.
- */
-type DanaPack = ReturnType<AssetIngestOperation['openAsDanapack']>;
-
-/**
- * Structure of a metadata record in a DanaPack file.
- *
- * A metadata document contains the metadata and media files that compose an imported asset.
- *
- * It has the following requirements:
- *
- * - Metadata MUST be specified as a json map from import references to asset records.
- * - Metadata need not fit any schema otherwise – it will be validated against the schema as part of the import and
- *   edited by the operator.
- * - An imported asset MAY have zero, one or multiple associated media files.
- * - Media files MUST be in a supported format.
- * - Media files MUST be specified as a relative path (using posix conventions) from the media directory of the dana
- *   package.
- **/
-const MetadataRecordSchema = z.object({
-  metadata: z.record(z.array(z.unknown())),
-  files: z.optional(z.array(z.string()))
-});
-type MetadataRecordSchema = z.TypeOf<typeof MetadataRecordSchema>;
-
-/**
- * Structure of the metadata.json entry in a DanaPack file.
- */
-const MetadataFileSchema = z.object({
-  assets: z.record(MetadataRecordSchema)
-});
-type MetadataFileSchema = z.TypeOf<typeof MetadataFileSchema>;
