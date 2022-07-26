@@ -1,4 +1,8 @@
-import { SchemaPropertyType } from '../../../common/asset.interfaces';
+import {
+  AccessControl,
+  defaultSchemaProperty,
+  SchemaPropertyType
+} from '../../../common/asset.interfaces';
 import { UnwrapPromise } from '../../../common/util/types';
 import { requireSuccess } from '../../../test/result';
 import { getTempfiles, getTempPackage } from '../../../test/tempfile';
@@ -21,6 +25,7 @@ describe(CollectionService, () => {
 
     await fixture.service.updateCollectionSchema(fixture.archive, root.id, [
       {
+        ...defaultSchemaProperty(),
         id: 'dogtype',
         label: 'Dog Type',
         required: true,
@@ -83,6 +88,7 @@ describe(CollectionService, () => {
         label: 'Dog Type',
         required: true,
         repeated: false,
+        visible: true,
         type: SchemaPropertyType.FREE_TEXT
       }
     ]);
@@ -98,6 +104,7 @@ describe(CollectionService, () => {
             label: 'Fluffyness',
             required: true,
             repeated: true,
+            visible: true,
             type: SchemaPropertyType.FREE_TEXT
           }
         ]
@@ -109,12 +116,14 @@ describe(CollectionService, () => {
         id: 'dogtype',
         label: 'Dog Type',
         required: true,
+        visible: true,
         repeated: false,
         type: SchemaPropertyType.FREE_TEXT
       },
       {
         id: 'fluffiness',
         label: 'Fluffyness',
+        visible: true,
         required: true,
         repeated: true,
         type: SchemaPropertyType.FREE_TEXT
@@ -153,6 +162,7 @@ describe(CollectionService, () => {
     requireSuccess(
       await fixture.service.updateCollectionSchema(fixture.archive, root.id, [
         {
+          ...defaultSchemaProperty(),
           id: 'dogtype',
           label: 'Dog Type',
           required: false,
@@ -164,6 +174,7 @@ describe(CollectionService, () => {
 
     const testAsset = requireSuccess(
       await fixture.assets.createAsset(fixture.archive, root.id, {
+        accessControl: AccessControl.RESTRICTED,
         metadata: {}
       })
     );
@@ -173,6 +184,7 @@ describe(CollectionService, () => {
       root.id,
       [
         {
+          ...defaultSchemaProperty(),
           id: 'dogtype',
           label: 'Dog Type',
           required: true,
@@ -194,6 +206,7 @@ describe(CollectionService, () => {
       root.id,
       [
         {
+          ...defaultSchemaProperty(),
           id: 'dogtype',
           label: 'Dog Type',
           required: true,
@@ -216,6 +229,7 @@ describe(CollectionService, () => {
           title: 'Some Database',
           schema: [
             {
+              ...defaultSchemaProperty(),
               id: 'title',
               label: 'Title',
               type: SchemaPropertyType.FREE_TEXT,
@@ -231,6 +245,7 @@ describe(CollectionService, () => {
         fixture.assetCollection.id,
         [
           {
+            ...defaultSchemaProperty(),
             id: 'dbRef',
             label: 'Database Reference',
             type: SchemaPropertyType.CONTROLLED_DATABASE,
@@ -250,6 +265,7 @@ describe(CollectionService, () => {
 
       const dbRecord = requireSuccess(
         await fixture.assets.createAsset(fixture.archive, db.id, {
+          accessControl: AccessControl.RESTRICTED,
           metadata: {
             title: ['My Database Record']
           }
@@ -260,6 +276,7 @@ describe(CollectionService, () => {
         fixture.archive,
         fixture.assetCollection.id,
         {
+          accessControl: AccessControl.RESTRICTED,
           metadata: {
             dbRef: [dbRecord.id]
           }
@@ -277,6 +294,7 @@ describe(CollectionService, () => {
         fixture.archive,
         fixture.assetCollection.id,
         {
+          accessControl: AccessControl.RESTRICTED,
           metadata: {
             dbRef: ['this is not a valid id']
           }

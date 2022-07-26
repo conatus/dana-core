@@ -1,9 +1,11 @@
 import faker from '@faker-js/faker';
 import { mapValues, times } from 'lodash';
 import {
+  AccessControl,
   Asset,
   AssetMetadata,
   AssetMetadataItem,
+  defaultSchemaProperty,
   SchemaProperty,
   SchemaPropertyType
 } from '../../common/asset.interfaces';
@@ -15,6 +17,7 @@ export const someAsset = (props: Partial<Asset> = {}): Asset => ({
   media: [],
   metadata: {},
   title: faker.word.noun(),
+  accessControl: AccessControl.RESTRICTED,
   ...props
 });
 
@@ -22,10 +25,9 @@ export const someSchemaProperty = (
   props: Partial<SchemaProperty> = {}
 ): SchemaProperty => {
   const base = {
+    ...defaultSchemaProperty(),
     id: faker.datatype.uuid(),
-    label: faker.word.noun(),
-    required: false,
-    repeated: false
+    label: faker.word.noun()
   };
 
   if (!props.type || props.type === SchemaPropertyType.FREE_TEXT) {

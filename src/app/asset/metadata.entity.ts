@@ -2,6 +2,7 @@ import { Embeddable, Property } from '@mikro-orm/core';
 import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import {
+  AccessControl,
   AssetMetadataItem,
   ControlledDatabaseSchemaProperty,
   ScalarSchemaProperty,
@@ -50,6 +51,9 @@ export abstract class SchemaPropertyValue {
     if (typeof this.repeated === 'undefined') {
       this.repeated = false;
     }
+    if (typeof this.visible === 'undefined') {
+      this.visible = true;
+    }
   }
 
   /**
@@ -81,6 +85,12 @@ export abstract class SchemaPropertyValue {
    */
   @Property({ type: 'boolean', default: true })
   repeated!: boolean;
+
+  /**
+   * True if the property is visible to public.
+   */
+  @Property({ type: 'boolean', default: true })
+  visible!: boolean;
 
   /**
    * Override to define how raw values in the database are converted into `AssetMetadataItem` values for presentation
@@ -278,6 +288,7 @@ export class ControlledDatabaseSchemaPropertyValue
       context.archive,
       this.databaseId,
       {
+        accessControl: AccessControl.RESTRICTED,
         metadata
       }
     );

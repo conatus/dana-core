@@ -1,3 +1,4 @@
+import { startCase } from 'lodash';
 import { v4 } from 'uuid';
 import { z } from 'zod';
 import { ErrorType, RequestType, RpcInterface } from './ipc.interfaces';
@@ -35,6 +36,23 @@ export interface AssetMetadataItem<T = unknown> {
 }
 
 /**
+ * Enum value for asset access rights.
+ */
+export enum AccessControl {
+  /** The media files and metadata are visible to the public and published */
+  PUBLIC = 'PUBLIC',
+
+  /** The metadata only is visible to the public */
+  METADATA_ONLY = 'METADATA_ONLY',
+
+  /** Metadata and media files are not visible to the public */
+  RESTRICTED = 'RESTRICTED'
+}
+
+export const getAccessControlLabel = (ac: AccessControl) =>
+  startCase(ac.toLowerCase().replace(/_/g, ' '));
+
+/**
  * Represent a single asset.
  */
 export const Asset = z.object({
@@ -48,7 +66,10 @@ export const Asset = z.object({
   metadata: z.record(AssetMetadataItem),
 
   /** All media files associated with the asset */
-  media: z.array(Media)
+  media: z.array(Media),
+
+  /** Information about access rights */
+  accessControl: z.nativeEnum(AccessControl)
 });
 export type Asset = z.TypeOf<typeof Asset>;
 export type AssetMetadata = Asset['metadata'];
@@ -76,6 +97,9 @@ const BaseSchemaProperty = z.object({
 
   /** Does the property support multiple occurances? */
   repeated: z.boolean(),
+
+  /** Is the the property visible to the public? */
+  visible: z.boolean(),
 
   /** Underlying type of the property? */
   type: z.nativeEnum(SchemaPropertyType)
@@ -154,11 +178,12 @@ export type SchemaProperty = z.TypeOf<typeof SchemaProperty>;
  * @param i Index of the property in the schema – used to generate a unique label.
  * @returns A new schema property with default values.
  */
-export const defaultSchemaProperty = (i: number): SchemaProperty => ({
+export const defaultSchemaProperty = (i?: number): SchemaProperty => ({
   id: v4(),
-  label: `Property ${i}`,
+  label: `Property ${i ?? ''}`,
   required: false,
   repeated: false,
+  visible: true,
   type: SchemaPropertyType.FREE_TEXT
 });
 
@@ -291,7 +316,8 @@ export const CreateAsset = RpcInterface({
   id: 'assets/create',
   request: z.object({
     collection: z.string(),
-    metadata: z.record(z.array(z.unknown()))
+    metadata: z.record(z.array(z.unknown())),
+    accessControl: z.nativeEnum(AccessControl)
   }),
   response: Asset,
   error: z.nativeEnum(FetchError)
@@ -357,7 +383,8 @@ export const UpdateAssetMetadata = RpcInterface({
   id: 'assets/update',
   request: z.object({
     assetId: z.string(),
-    payload: z.record(z.array(z.unknown()))
+    payload: z.record(z.array(z.unknown())).optional(),
+    accessControl: z.nativeEnum(AccessControl).optional()
   }),
   response: z.object({}),
   error: z.nativeEnum(FetchError).or(SingleValidationError)

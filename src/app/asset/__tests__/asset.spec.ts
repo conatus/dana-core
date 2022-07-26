@@ -1,8 +1,9 @@
 import {
+  AccessControl,
+  defaultSchemaProperty,
   SchemaProperty,
   SchemaPropertyType
 } from '../../../common/asset.interfaces';
-import { ok } from '../../../common/util/error';
 import { collectEvents } from '../../../test/event';
 import { requireFailure, requireSuccess } from '../../../test/result';
 import { getTempfiles, getTempPackage } from '../../../test/tempfile';
@@ -17,6 +18,7 @@ import {
 
 const SCHEMA: SchemaProperty[] = [
   {
+    ...defaultSchemaProperty(),
     id: 'optionalProperty',
     label: 'Optional Property',
     type: SchemaPropertyType.FREE_TEXT,
@@ -24,6 +26,7 @@ const SCHEMA: SchemaProperty[] = [
     required: false
   },
   {
+    ...defaultSchemaProperty(),
     id: 'requiredProperty',
     label: 'Some Property',
     type: SchemaPropertyType.FREE_TEXT,
@@ -31,6 +34,7 @@ const SCHEMA: SchemaProperty[] = [
     required: true
   },
   {
+    ...defaultSchemaProperty(),
     id: 'repeatedProperty',
     label: 'Some Property',
     type: SchemaPropertyType.FREE_TEXT,
@@ -52,6 +56,7 @@ describe(AssetService, () => {
         fixture.archive,
         fixture.assetCollection.id,
         {
+          accessControl: AccessControl.RESTRICTED,
           metadata: {
             requiredProperty: ['1'],
             optionalProperty: ['2'],
@@ -132,6 +137,7 @@ describe(AssetService, () => {
       fixture.archive,
       fixture.assetCollection.id,
       {
+        accessControl: AccessControl.RESTRICTED,
         metadata: {}
       }
     );
@@ -152,6 +158,7 @@ describe(AssetService, () => {
         fixture.archive,
         fixture.assetCollection.id,
         {
+          accessControl: AccessControl.RESTRICTED,
           metadata: {
             requiredProperty: ['1']
           }
@@ -177,6 +184,7 @@ describe(AssetService, () => {
         const fixture = await setup();
         const [property] = await fixture.givenTheSchema([
           {
+            ...defaultSchemaProperty(),
             type: SchemaPropertyType.FREE_TEXT,
             id: 'dbRecord',
             label: 'Label',
@@ -199,6 +207,7 @@ describe(AssetService, () => {
         const fixture = await setup();
         const [property] = await fixture.givenTheSchema([
           {
+            ...defaultSchemaProperty(),
             type: SchemaPropertyType.FREE_TEXT,
             id: 'dbRecord',
             label: 'Label',
@@ -224,6 +233,7 @@ describe(AssetService, () => {
         const db = await fixture.givenALabelRecordDatabase();
         const [property] = await fixture.givenTheSchema([
           {
+            ...defaultSchemaProperty(),
             type: SchemaPropertyType.CONTROLLED_DATABASE,
             databaseId: db.id,
             id: 'dbRecord',
@@ -235,6 +245,7 @@ describe(AssetService, () => {
 
         const referencedAsset = requireSuccess(
           await fixture.service.createAsset(fixture.archive, db.id, {
+            accessControl: AccessControl.RESTRICTED,
             metadata: { title: ['Value'] }
           })
         );
@@ -259,6 +270,7 @@ describe(AssetService, () => {
         const db = await fixture.givenALabelRecordDatabase();
         const [property] = await fixture.givenTheSchema([
           {
+            ...defaultSchemaProperty(),
             type: SchemaPropertyType.CONTROLLED_DATABASE,
             databaseId: db.id,
             id: 'dbRecord',
@@ -288,6 +300,7 @@ describe(AssetService, () => {
         const db = await fixture.givenALabelRecordDatabase();
         const [property] = await fixture.givenTheSchema([
           {
+            ...defaultSchemaProperty(),
             type: SchemaPropertyType.CONTROLLED_DATABASE,
             databaseId: db.id,
             id: 'dbRecord',
@@ -330,6 +343,7 @@ describe(AssetService, () => {
 
       const targetRecord = requireSuccess(
         await fixture.service.createAsset(fixture.archive, targetDb.id, {
+          accessControl: AccessControl.RESTRICTED,
           metadata: {}
         })
       );
@@ -337,7 +351,10 @@ describe(AssetService, () => {
         await fixture.service.createAsset(
           fixture.archive,
           fixture.assetCollection.id,
-          { metadata: { [dbProperty.id]: [targetRecord.id] } }
+          {
+            accessControl: AccessControl.RESTRICTED,
+            metadata: { [dbProperty.id]: [targetRecord.id] }
+          }
         )
       );
 
@@ -372,6 +389,7 @@ describe(AssetService, () => {
 
       const targetRecord = requireSuccess(
         await fixture.service.createAsset(fixture.archive, targetDb.id, {
+          accessControl: AccessControl.RESTRICTED,
           metadata: {}
         })
       );
@@ -380,7 +398,10 @@ describe(AssetService, () => {
         await fixture.service.createAsset(
           fixture.archive,
           fixture.assetCollection.id,
-          { metadata: { [dbProperty.id]: [targetRecord.id] } }
+          {
+            accessControl: AccessControl.RESTRICTED,
+            metadata: { [dbProperty.id]: [targetRecord.id] }
+          }
         )
       );
 
@@ -415,12 +436,14 @@ describe(AssetService, () => {
 
       const targetRecord = requireSuccess(
         await fixture.service.createAsset(fixture.archive, targetDb.id, {
+          accessControl: AccessControl.RESTRICTED,
           metadata: {}
         })
       );
 
       const anotherRecord = requireSuccess(
         await fixture.service.createAsset(fixture.archive, targetDb.id, {
+          accessControl: AccessControl.RESTRICTED,
           metadata: {}
         })
       );
@@ -429,7 +452,10 @@ describe(AssetService, () => {
         await fixture.service.createAsset(
           fixture.archive,
           fixture.assetCollection.id,
-          { metadata: { [dbProperty.id]: [targetRecord.id, anotherRecord.id] } }
+          {
+            accessControl: AccessControl.RESTRICTED,
+            metadata: { [dbProperty.id]: [targetRecord.id, anotherRecord.id] }
+          }
         )
       );
 
@@ -465,11 +491,13 @@ describe(AssetService, () => {
       const targetRecords = [
         requireSuccess(
           await fixture.service.createAsset(fixture.archive, targetDb.id, {
+            accessControl: AccessControl.RESTRICTED,
             metadata: {}
           })
         ),
         requireSuccess(
           await fixture.service.createAsset(fixture.archive, targetDb.id, {
+            accessControl: AccessControl.RESTRICTED,
             metadata: {}
           })
         )
@@ -482,6 +510,7 @@ describe(AssetService, () => {
           fixture.archive,
           fixture.assetCollection.id,
           {
+            accessControl: AccessControl.RESTRICTED,
             metadata: {
               [dbProperty.id]: targedRecordIds
             }
@@ -511,7 +540,10 @@ describe(AssetService, () => {
         await fixture.service.createAsset(
           fixture.archive,
           fixture.assetCollection.id,
-          { metadata: { requiredProperty: ['Hello'] } }
+          {
+            metadata: { requiredProperty: ['Hello'] },
+            accessControl: AccessControl.RESTRICTED
+          }
         )
       );
 
@@ -546,7 +578,8 @@ describe(AssetService, () => {
         fixture.archive,
         fixture.assetCollection.id,
         {
-          metadata: { requiredProperty: ['Hello'] }
+          metadata: { requiredProperty: ['Hello'] },
+          accessControl: AccessControl.RESTRICTED
         }
       )
     );
@@ -613,6 +646,7 @@ async function setup() {
         title: 'Some Database',
         schema: [
           {
+            ...defaultSchemaProperty(),
             id: 'title',
             type: SchemaPropertyType.FREE_TEXT,
             label: 'Title',
