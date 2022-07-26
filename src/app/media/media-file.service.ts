@@ -1,3 +1,4 @@
+import { EventEmitter } from 'eventemitter3';
 import { createReadStream } from 'fs';
 import { copyFile, stat, unlink } from 'fs/promises';
 import mime from 'mime';
@@ -18,7 +19,7 @@ interface Extractable {
   extractTo: (path: string) => void | Promise<void>;
 }
 
-export class MediaFileService {
+export class MediaFileService extends EventEmitter<MediaEvents> {
   private static RENDITION_URI_PREFIX = 'media://';
   private log = new Logger({ name: 'MediaFileService' });
 
@@ -41,8 +42,10 @@ export class MediaFileService {
    * @param source File path to the source file
    * @returns A MediaFile instance representing the file
    */
-  putFile(archive: ArchivePackage, source: string | Extractable) {
-    return archive.useDb(async (db): Promise<FileImportResult<MediaFile>> => {
+  async putFile(archive: ArchivePackage, source: string | Extractable) {
+    const res = await archive.useDb(async (db): Promise<
+      FileImportResult<MediaFile>
+    > => {
       if (typeof source === 'string') {
         const sourcePath = source;
         source = {
@@ -71,13 +74,19 @@ export class MediaFileService {
       }
 
       mediaFile.sha256 = await hashStream(createReadStream(destPath));
-      await this.createImageRendition(archive, mediaFile, 'png');
+      await this.createRenditions(archive, mediaFile);
 
       await mediaRepository.persistAndFlush(mediaFile);
       this.log.info('Created media file', mediaFile.id);
 
       return ok(mediaFile);
     });
+
+    if (res.status === 'ok') {
+      this.emit('change', { archive, created: [res.value.id], deleted: [] });
+    }
+
+    return res;
   }
 
   /**
@@ -105,6 +114,10 @@ export class MediaFileService {
         files.map((file) => this.entityToValue(archive, file))
       );
     });
+  }
+
+  createRenditions(archive: ArchivePackage, mediaFile: MediaFile) {
+    return this.createImageRendition(archive, mediaFile, 'png');
   }
 
   /**
@@ -136,11 +149,12 @@ export class MediaFileService {
           this.log.info('Deleted file', file.id);
         } catch (err) {
           this.log.error('Failed to delete file', file.id, err);
-
           results.push(error(IngestError.IO_ERROR));
         }
       }
     });
+
+    this.emit('change', { archive, created: [], deleted: ids });
 
     return results;
   }
@@ -162,13 +176,30 @@ export class MediaFileService {
   }
 
   /**
-   * List all media files in an archive
+   * Returns the local filesystem path to a rendition for a stored file.
+   *
+   * @param archive The archive to resolve a rendition for
+   * @param mediaFile Media file to return a rendition path
+   * @returns Path to the media file's rendition
+   */
+  resolveRendition(archive: ArchivePackage, mediaFile: MediaFile) {
+    return MediaFileService.resolveRenditionUri(
+      archive,
+      this.getRenditionUri(archive, mediaFile)
+    );
+  }
+
+  /**
+   * List ids of all media files in an archive
    *
    * @param archive Archive to list media from
    * @returns List of media files
    */
-  listMedia(archive: ArchivePackage) {
-    return archive.list(MediaFile);
+  async allIds(archive: ArchivePackage) {
+    const items = await archive.useDb((db) =>
+      db.find(MediaFile, {}, { fields: ['id'] })
+    );
+    return items.map((x) => x.id);
   }
 
   /**
@@ -247,10 +278,21 @@ export class MediaFileService {
     const stats = await stat(this.getMediaPath(archive, entity));
 
     return {
-      ...entity,
+      id: entity.id,
+      mimeType: entity.mimeType,
       type: 'image',
       rendition: this.getRenditionUri(archive, entity),
       fileSize: stats.size
     };
   }
+}
+
+interface MediaChangeEvent {
+  archive: ArchivePackage;
+  created: string[];
+  deleted: string[];
+}
+
+interface MediaEvents {
+  change: [MediaChangeEvent];
 }

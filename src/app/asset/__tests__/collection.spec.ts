@@ -88,8 +88,8 @@ describe(CollectionService, () => {
         label: 'Dog Type',
         required: true,
         repeated: false,
-        visible: true,
-        type: SchemaPropertyType.FREE_TEXT
+        type: SchemaPropertyType.FREE_TEXT,
+        visible: true
       }
     ]);
 
@@ -104,8 +104,8 @@ describe(CollectionService, () => {
             label: 'Fluffyness',
             required: true,
             repeated: true,
-            visible: true,
-            type: SchemaPropertyType.FREE_TEXT
+            type: SchemaPropertyType.FREE_TEXT,
+            visible: true
           }
         ]
       }

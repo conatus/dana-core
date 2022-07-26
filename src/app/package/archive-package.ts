@@ -17,7 +17,11 @@ import { required } from '../../common/util/assert';
  * Represents file and metadata storage for an archive.
  */
 export class ArchivePackage {
-  constructor(readonly location: string, private db: MikroORM) {}
+  constructor(
+    readonly location: string,
+    private db: MikroORM,
+    readonly syncConfig?: ArchiveSyncConfig
+  ) {}
 
   /**
    * Unique id for the archive.
@@ -121,4 +125,9 @@ interface ListOpts<T extends AnyEntity<T>, P extends string = never> {
 
   /** Populate option for eagerly fetching relationships */
   populate?: Array<AutoPath<T, P>>;
+}
+
+export interface ArchiveSyncConfig {
+  url: string;
+  auth: string;
 }
