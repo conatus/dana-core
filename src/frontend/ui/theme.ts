@@ -109,7 +109,8 @@ export const theme: Theme & { listItems?: Record<string, ThemeUIStyleObject> } =
         backgroundColor: 'var(--theme-ui-colors-background)'
       },
       input: {
-        padding: '8px'
+        padding: '8px',
+        fontFamily: 'body'
       }
     },
     listItems: {
