@@ -22,6 +22,7 @@ const colors = {
   brown: '#81683E',
   charcoal: '#3C3746',
   blue: '#28108A',
+  brightBlue: '#001FCD',
   black: '#0A0A0A',
   lightGrey: ' #818388'
 };
@@ -46,7 +47,7 @@ export const theme: Theme & { listItems?: Record<string, ThemeUIStyleObject> } =
       error: polished.setHue(0, colors.green),
       warn: polished.setHue(26, colors.green),
       border: colors.gray,
-      highlight: colors.blue,
+      highlight: colors.brightBlue,
       highlightHint: polished.transparentize(0.8, colors.charcoal),
       highlightContrast: 'white',
       background: colors.gray2,
