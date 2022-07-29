@@ -39,7 +39,20 @@ export const NavListSection: FC<NavListSectionProps> = ({
   ...props
 }) => (
   <Box sx={{ pb: 5 }} {...props}>
-    <Heading sx={{ p: 2, px: 3 }} variant="section" as="h3">
+    <Heading
+      sx={{
+        p: 2,
+        px: 3,
+        fontStyle: 'normal',
+        fontWeight: '800',
+        fontSize: '10px',
+        lineHeight: '14px',
+
+        color: '#818388'
+      }}
+      variant="section"
+      as="h3"
+    >
       {title}
     </Heading>
 
@@ -223,7 +236,14 @@ export const NavListItem: FC<NavListItemProps> = forwardRef(
     } else {
       return (
         <NavLink
-          sx={{ color: 'inherit', textDecoration: 'inherit' }}
+          sx={{
+            fontFamily: 'body',
+            textDecoration: 'inherit',
+            color: 'white',
+            fontWeight: '500',
+            fontSize: '12px',
+            lineHeight: '16px'
+          }}
           to={path}
           {...props}
         >
