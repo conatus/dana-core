@@ -91,7 +91,8 @@ export const theme: Theme & { listItems?: Record<string, ThemeUIStyleObject> } =
       label: {
         fontSize: 1,
         paddingBottom: 2,
-        fontWeight: 600
+        fontWeight: 600,
+        fontFamily: 'body'
       },
       select: {
         boxSizing: 'border-box',
