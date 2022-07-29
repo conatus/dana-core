@@ -47,7 +47,6 @@ export const NavListSection: FC<NavListSectionProps> = ({
         fontWeight: '800',
         fontSize: '10px',
         lineHeight: '14px',
-
         color: '#818388'
       }}
       variant="section"
@@ -184,13 +183,16 @@ export const NavListItem: FC<NavListItemProps> = forwardRef(
           alignItems: 'center',
           bg: isActive ? 'highlight' : undefined,
           p: 2,
+          minHeight: '30px',
           px: 3,
-          fontSize: 1,
           marginTop: '1px',
           color: isActive ? 'highlightContrast' : undefined,
           '&:hover': {
             bg: isActive ? undefined : 'highlightHint'
-          }
+          },
+          fontWeight: '500',
+          fontSize: '14px',
+          lineHeight: '16px'
         }}
         {...props}
       >
@@ -305,8 +307,8 @@ export const ArchiveWindowLayout: FC<ArchiveWindowLayoutProps> = ({
               pt: 1,
               flexShrink: 0,
               borderTop: '1px solid var(--theme-ui-colors-border)',
-              color: 'muted',
-              bg: 'gray1'
+              color: 'white',
+              bg: 'black'
             }}
           >
             {sidebarButtons}
