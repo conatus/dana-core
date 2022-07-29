@@ -275,7 +275,16 @@ export const WindowTitle: FC<{ showVersion?: boolean } & BoxProps> = ({
       }}
       {...props}
     >
-      <Text sx={{ fontWeight: 600 }}>{children || title}</Text>
+      <Text
+        sx={{
+          fontWeight: 800,
+          fontFamily: 'body',
+          fontSize: '18px',
+          lineHeight: '25px'
+        }}
+      >
+        {children || title}
+      </Text>
       {showVersion && (
         <Text
           sx={{

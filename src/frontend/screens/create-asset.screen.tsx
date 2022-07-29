@@ -64,7 +64,8 @@ export const CreateAssetScreen = () => {
         <Text
           sx={{
             fontSize: 2,
-            fontWeight: 600
+            fontWeight: 600,
+            fontFamily: 'body'
           }}
         >
           New Asset
