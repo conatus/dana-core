@@ -15,7 +15,7 @@ const controlHover = {
 const colors = {
   dark: '#010000',
   gray: '#D9D4D3',
-  gray1: '#EDE9E9',
+  gray1: '#F5F5F5',
   gray2: '#F9F7F7',
   green: '#60D39B',
   muted: '#818B88',
