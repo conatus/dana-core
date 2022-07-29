@@ -141,7 +141,7 @@ export const ArchiveScreen: FC<{ title?: string }> = () => {
       }
       main={
         <Flex sx={{ height: '100%', flexDirection: 'column' }}>
-          <WindowTitle showVersion />
+          <WindowTitle />
 
           <Outlet />
         </Flex>
