@@ -288,13 +288,16 @@ export const WindowTitle: FC<{ showVersion?: boolean } & BoxProps> = ({
       {showVersion && (
         <Text
           sx={{
-            position: 'absolute',
-            right: 0,
             bottom: 0,
-            fontSize: 0,
-            textAlign: 'right',
+            color: '#818388',
+            fontSize: '14px',
+            fontWeight: 500,
+            lineHeight: ' 14px',
             p: 1,
-            px: 3
+            position: 'absolute',
+            px: 3,
+            right: 0,
+            textAlign: 'right'
           }}
         >
           v{version} ({releaseDate.replace(/T\d\d.*/, '')})
