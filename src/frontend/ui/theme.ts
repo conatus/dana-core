@@ -46,7 +46,7 @@ export const theme: Theme & { listItems?: Record<string, ThemeUIStyleObject> } =
       error: polished.setHue(0, colors.green),
       warn: polished.setHue(26, colors.green),
       border: colors.gray,
-      highlight: colors.charcoal,
+      highlight: colors.blue,
       highlightHint: polished.transparentize(0.8, colors.charcoal),
       highlightContrast: 'white',
       background: colors.gray2,
