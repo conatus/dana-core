@@ -72,9 +72,8 @@ export const theme: Theme & { listItems?: Record<string, ThemeUIStyleObject> } =
       selected: '0 0 0 2px var(--theme-ui-colors-accent)'
     },
     fonts: {
-      body: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif',
-      heading:
-        'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif',
+      body: '"Manrope", sans-serif',
+      heading: '"Manrope", sans-serif',
       monospace: 'Menlo, monospace'
     },
     fontSizes: [12, 14, 16, 20, 24, 32, 48, 64, 72],
