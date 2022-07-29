@@ -69,7 +69,7 @@ export const ArchiveScreen: FC<{ title?: string }> = () => {
     <ArchiveWindowLayout
       sidebar={
         <>
-          <Box sx={{ bg: 'black', height: '100%' }}>
+          <Box sx={{ bg: 'black', height: '100%', paddingLeft: '30px' }}>
             <WindowInset />
 
             {/* Import Sessions */}
