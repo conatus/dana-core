@@ -1,7 +1,7 @@
 /** @jsxImportSource theme-ui */
 
 import { FC, useCallback } from 'react';
-import { Button, Heading } from 'theme-ui';
+import { Button } from 'theme-ui';
 import { OpenArchive } from '../../common/interfaces/archive.interfaces';
 import { useRPC } from '../ipc/ipc.hooks';
 import { WindowDragArea } from '../ui/window';
