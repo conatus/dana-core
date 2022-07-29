@@ -133,10 +133,12 @@ export const theme: Theme & { listItems?: Record<string, ThemeUIStyleObject> } =
       }),
       section: {
         textTransform: 'uppercase',
-        fontWeight: 700,
-        fontSize: 0,
-        color: 'grey',
-        letterSpacing: 0.95
+        fontWeight: 800,
+        letterSpacing: 0.95,
+        fontStyle: 'normal',
+        fontSize: '10px',
+        lineHeight: '14px',
+        color: 'lightGrey'
       }
     },
     images: {
