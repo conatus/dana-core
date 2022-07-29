@@ -121,6 +121,9 @@ export const theme: Theme & { listItems?: Record<string, ThemeUIStyleObject> } =
       }
     },
     text: {
+      default: {
+        fontFamily: 'body'
+      },
       heading: (theme) => ({
         fontFamily: scaleGet(theme.fonts, 'heading'),
         fontWeight: scaleGet(theme.fontWeights, 'heading'),
