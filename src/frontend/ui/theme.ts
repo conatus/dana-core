@@ -153,7 +153,7 @@ export const theme: Theme & { listItems?: Record<string, ThemeUIStyleObject> } =
         paddingLeft: 6,
         paddingRight: 6,
         color: scaleGet(theme.colors, 'primaryContrast'),
-        backgroundColor: scaleGet(theme.fonts, 'primary'),
+        backgroundColor: colors.blue,
         borderRadius: 0,
         '&:disabled': {
           bg: scaleGet(theme.colors, 'muted')
