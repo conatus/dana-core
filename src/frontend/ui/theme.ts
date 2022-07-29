@@ -21,7 +21,8 @@ const colors = {
   muted: '#818B88',
   brown: '#81683E',
   charcoal: '#3C3746',
-  blue: '#28108A'
+  blue: '#28108A',
+  black: '#0A0A0A'
 };
 
 const scaleGet = <T>(scale: Scale<T> | undefined, key: string | number) =>
@@ -49,7 +50,7 @@ export const theme: Theme & { listItems?: Record<string, ThemeUIStyleObject> } =
       highlightContrast: 'white',
       background: colors.gray2,
       foreground: 'white',
-      primary: colors.blue,
+      primary: colors.black,
       primaryContrast: 'white',
       secondary: '#81683E',
       accent: '#008FFF',
@@ -153,7 +154,7 @@ export const theme: Theme & { listItems?: Record<string, ThemeUIStyleObject> } =
         paddingRight: 6,
         color: scaleGet(theme.colors, 'primaryContrast'),
         backgroundColor: scaleGet(theme.fonts, 'primary'),
-        borderRadius: scaleGet(theme.radii, 'control'),
+        borderRadius: 0,
         '&:disabled': {
           bg: scaleGet(theme.colors, 'muted')
         }

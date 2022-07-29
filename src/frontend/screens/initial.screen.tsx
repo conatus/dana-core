@@ -27,6 +27,17 @@ export const InitialScreen: FC = () => {
     }
   }, [rpc]);
 
+  const buttonStyling = {
+    background: '#001FCD',
+    border: '1px solid #001FCD',
+    width: '100%',
+    height: '36px',
+    fontStyle: 'normal',
+    fontWeight: 700,
+    fontSize: '12px',
+    lineHeight: '16px'
+  };
+
   return (
     <WindowDragArea
       sx={{
@@ -40,17 +51,24 @@ export const InitialScreen: FC = () => {
         color: 'primaryContrast'
       }}
     >
-      {/* <WindowInset /> */}
-      <Heading>Dana Core</Heading>
-
       <span sx={{ flex: 1 }} />
 
-      <Button variant="secondaryTransparent" onClick={newArchive}>
+      <Button
+        onClick={newArchive}
+        sx={{ ...buttonStyling, marginBottom: '20px' }}
+      >
         New Archive
       </Button>
 
-      <Button variant="secondaryTransparent" onClick={openArchive}>
-        Open existing Archive
+      <Button
+        onClick={openArchive}
+        sx={{
+          ...buttonStyling,
+          backgroundColor: 'white',
+          color: '#001FCD'
+        }}
+      >
+        Load archive
       </Button>
 
       <span sx={{ flex: 1 }} />
