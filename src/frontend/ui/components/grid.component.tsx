@@ -321,7 +321,8 @@ function Row<T extends Resource>({
     flexDirection: 'row',
     bg: selected ? 'primary' : plainBg,
     color: selected ? 'primaryContrast' : undefined,
-    position: 'relative'
+    position: 'relative',
+    fontFamily: 'body'
   };
 
   if (!colData || !columnSizes) {
@@ -389,7 +390,8 @@ const GridWrapper = forwardRef<HTMLDivElement, HTMLAttributes<unknown>>(
               position: 'sticky',
               zIndex: 2,
               fontWeight: 700,
-              bg: 'background'
+              bg: 'background',
+              fontFamily: 'body'
             }}
           >
             {columns.map((col, i) => (
