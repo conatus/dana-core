@@ -332,11 +332,7 @@ export const AssetFilesList: FC<MediaFileListProps> = ({
           }}
           key={file.id}
         >
-          <Image
-            key={file.rendition}
-            src={file.rendition}
-            sx={{ objectFit: 'contain', maxHeight: 80, width: 80 }}
-          />
+          <Image key={file.rendition} src={file.rendition} />
           <Box
             sx={{
               flex: 1,
