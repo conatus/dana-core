@@ -352,9 +352,9 @@ export const AssetFilesList: FC<MediaFileListProps> = ({
             onClick={onAddFile}
             sx={{ fontSize: 1, p: 0 }}
             variant="primaryTransparent"
+            title="Add media"
           >
             <Plus sx={{ pb: 1 }} size={18} />
-            Add Media
           </Button>
         )}
       </Flex>
