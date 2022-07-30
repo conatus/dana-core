@@ -216,7 +216,11 @@ export const MetadataInspector: FC<MetadataInspectorProps> = ({
         }}
       >
         <Box>
-          <Label>Access Control</Label>
+          <Label
+            sx={{ fontWeight: 'bold', lineHeight: '14px', fontSize: '10px' }}
+          >
+            Access Control
+          </Label>
 
           {isEditing ? (
             <Select
@@ -236,7 +240,9 @@ export const MetadataInspector: FC<MetadataInspectorProps> = ({
               ))}
             </Select>
           ) : (
-            getAccessControlLabel(asset.accessControl)
+            <Text sx={{ fontSize: '10px' }}>
+              {getAccessControlLabel(asset.accessControl)}
+            </Text>
           )}
         </Box>
 
