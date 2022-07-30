@@ -30,6 +30,11 @@ export const MetadataItemCell: DataGridCell<{
           p: '2px',
           '&:hover .show-hover': { opacity: 1 }
         }}
+        title={
+          redacted
+            ? 'This is redacted - it will not be exported or shown outside of this archive'
+            : ''
+        }
       >
         {presentationValue(value?.metadata)}
         {redactedProps && (
@@ -52,7 +57,11 @@ export const MetadataItemCell: DataGridCell<{
               opacity: redacted ? 1 : 0,
               display: 'inline-block'
             }}
-            title="Redact"
+            title={
+              redacted
+                ? 'Unredact - field will be allowed to be exported from this archive'
+                : 'Redact - no longer allow export outside of this archive'
+            }
           >
             <img sx={{ width: 10, height: 10 }} src={redactedIcon} />
           </button>
