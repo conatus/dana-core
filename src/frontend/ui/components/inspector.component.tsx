@@ -352,7 +352,7 @@ export const AssetFilesList: FC<MediaFileListProps> = ({
           sx={{
             '&:last-child': { borderBottom: 'light' },
             borderTop: 'light',
-            flexDirection: 'row',
+            flexDirection: 'column',
             p: 4,
             bg: 'background'
           }}
