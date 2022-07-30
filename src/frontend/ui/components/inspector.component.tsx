@@ -291,7 +291,8 @@ export const MetadataInspector: FC<MetadataInspectorProps> = ({
             position: 'sticky',
             bottom: 0,
             p: 4,
-            borderTop: 'light'
+            borderTop: 'light',
+            backgroundColor: 'offWhite'
           }}
         >
           {onCancelEdits && (
