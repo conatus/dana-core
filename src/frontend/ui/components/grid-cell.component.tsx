@@ -21,6 +21,7 @@ export const MetadataItemCell: DataGridCell<{
   const ctx = useContext(MetadataItemContext);
   const redactedProps = value?.redactedProps;
   const redacted = value?.redactedProps?.includes(property);
+
   return (
     <div
       sx={{
@@ -50,6 +51,7 @@ export const MetadataItemCell: DataGridCell<{
             opacity: redacted ? 1 : 0,
             display: 'inline-block'
           }}
+          title="Redact"
         >
           <img sx={{ width: 10, height: 10 }} src={redactedIcon} />
         </button>
