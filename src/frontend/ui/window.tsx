@@ -290,7 +290,11 @@ export const WindowTitle: FC<{ showVersion?: boolean } & BoxProps> = ({
         <Button
           sx={{
             display: 'flex',
-            alignItems: 'center'
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            paddingX: '13px',
+            paddingY: '13px',
+            width: '93px'
           }}
         >
           <ThreeDots /> Options
