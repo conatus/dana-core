@@ -4,12 +4,7 @@ import { Scale } from '@theme-ui/css';
 import { Dict } from '../../common/util/types';
 
 const controlHover = {
-  '&:hover:not(:disabled):not(:active):not([aria-selected="true"])': {
-    opacity: 0.5
-  },
-  '&:disabled:not(:active):not([aria-selected="true"])': {
-    opacity: 0.5
-  }
+  cursor: 'pointer'
 };
 
 export const colors = {
