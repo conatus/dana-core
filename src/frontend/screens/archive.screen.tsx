@@ -97,12 +97,12 @@ export const ArchiveScreen: FC<{ title?: string }> = () => {
                     {
                       action: () => startImport(collection.id),
                       id: 'start-import',
-                      label: 'Import assets'
+                      label: 'Import collection'
                     },
                     {
                       action: () => startExport(collection.id),
                       id: 'start-export',
-                      label: 'Export assets'
+                      label: 'Export collection'
                     }
                   ]
                 })}
