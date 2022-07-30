@@ -135,11 +135,17 @@ export const ArchiveScreen: FC<{ title?: string }> = () => {
       }
       sidebarButtons={
         <>
-          <IconButton {...createMenu.triggerProps}>
+          <IconButton
+            {...createMenu.triggerProps}
+            title="Create new collection or database"
+          >
             <Plus size={32} />
           </IconButton>
 
-          <IconButton onClick={() => rpc(ExportAll, {})}>
+          <IconButton
+            onClick={() => rpc(ExportAll, {})}
+            title="Export to Danapack"
+          >
             <Share size={14} />
           </IconButton>
         </>
