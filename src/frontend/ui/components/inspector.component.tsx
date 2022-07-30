@@ -1,7 +1,7 @@
 /** @jsxImportSource theme-ui */
 
 import { FC, useCallback, useState } from 'react';
-import { Plus, X } from 'react-bootstrap-icons';
+import { PencilFill, Plus, X } from 'react-bootstrap-icons';
 import {
   Label,
   Box,
@@ -197,13 +197,9 @@ export const MetadataInspector: FC<MetadataInspectorProps> = ({
         </Label>
 
         {onStartEditing && !isEditing && (
-          <Button
-            sx={{ fontSize: 1, p: 0 }}
-            variant="primaryTransparent"
-            onClick={onStartEditing}
-          >
-            Edit
-          </Button>
+          <IconButton onClick={onStartEditing}>
+            <PencilFill sx={{ height: '10px', color: '#818388' }} />
+          </IconButton>
         )}
       </Flex>
 
@@ -268,8 +264,22 @@ export const MetadataInspector: FC<MetadataInspectorProps> = ({
 
         {!hideRecordId && (
           <Box>
-            <Label>Record ID</Label>
-            <Text sx={{ userSelect: 'all' }}>{asset.id}</Text>
+            <Label
+              sx={{ fontWeight: 'bold', lineHeight: '14px', fontSize: '10px' }}
+            >
+              Record ID
+            </Label>
+            <Text
+              sx={{
+                userSelect: 'all',
+                fontFamily: 'body',
+                fontWeight: 'body',
+                fontSize: '10px',
+                lineHeight: '14px'
+              }}
+            >
+              {asset.id}
+            </Text>
           </Box>
         )}
       </Box>
