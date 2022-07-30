@@ -70,8 +70,9 @@ export function DataGrid<T extends Resource>({
   const selection = SelectionContext.useContainer();
 
   const fontSize = Number(theme.fontSizes?.[fontSizeParam]) ?? 13;
-  const padding = Number(theme.space?.[2]) ?? 3;
-  const rowHeight = 2 * padding + fontSize;
+  const rowHeight = 45;
+
+  console.log(`Row height set to ${rowHeight}`);
 
   const dataVal = useMemo(
     (): CellData<T> => ({ cursor: data, columns }),
@@ -423,7 +424,9 @@ const GridWrapper = forwardRef<HTMLDivElement, HTMLAttributes<unknown>>(
                     color: 'lightGrey',
                     fontWeight: 'heavy',
                     fontSize: '10px',
-                    lineHeight: '14px'
+                    lineHeight: '14px',
+                    textAlign: 'left',
+                    paddingLeft: 10
                   }}
                 >
                   {col.label}
