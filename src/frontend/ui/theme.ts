@@ -84,6 +84,7 @@ export const theme: Theme & { listItems?: Record<string, ThemeUIStyleObject> } =
       body: 400,
       heading: 400,
       display: 600,
+      bold: 700,
       heavy: 800
     },
     lineHeights: {
