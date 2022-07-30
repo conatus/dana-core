@@ -301,18 +301,23 @@ export const ArchiveWindowLayout: FC<ArchiveWindowLayoutProps> = ({
         </Box>
 
         {sidebarButtons && (
-          <Box
+          <Flex
             sx={{
               p: 0,
               pt: 1,
+              alignItems: 'center',
+              justifyContent: 'flex-start',
               flexShrink: 0,
               borderTop: '1px solid var(--theme-ui-colors-border)',
               color: 'white',
-              bg: 'black'
+              bg: 'black',
+              '> *': {
+                marginInlineEnd: 2
+              }
             }}
           >
             {sidebarButtons}
-          </Box>
+          </Flex>
         )}
       </ReflexElement>
 

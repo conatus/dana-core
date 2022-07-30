@@ -39,6 +39,7 @@ export const CreateAssetScreen = () => {
       await rpc(CreateAsset, {
         collection: collectionId,
         metadata: mapValues(props.metadata, (md) => md.rawValue),
+        redactedProperties: [],
         accessControl: props.accessControl ?? AccessControl.RESTRICTED
       })
     );
@@ -82,6 +83,7 @@ export const CreateAssetScreen = () => {
           media: [],
           metadata: {},
           accessControl: AccessControl.RESTRICTED,
+          redactedProperties: [],
           title: 'New Asset',
           collectionId: collection.id
         }}

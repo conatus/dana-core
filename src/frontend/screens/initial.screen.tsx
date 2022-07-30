@@ -2,6 +2,7 @@
 
 import { FC, useCallback } from 'react';
 import { Button } from 'theme-ui';
+import { BootstrapArchive } from '../../common/ingest.interfaces';
 import { OpenArchive } from '../../common/interfaces/archive.interfaces';
 import { useRPC } from '../ipc/ipc.hooks';
 import { WindowDragArea } from '../ui/window';
@@ -11,8 +12,8 @@ import { WindowDragArea } from '../ui/window';
  */
 export const InitialScreen: FC = () => {
   const rpc = useRPC();
-  const openArchive = useCallback(async () => {
-    const res = await rpc(OpenArchive, {});
+  const openDanapack = useCallback(async () => {
+    const res = await rpc(BootstrapArchive, {});
 
     if (res.status === 'ok') {
       window.close();
@@ -54,21 +55,23 @@ export const InitialScreen: FC = () => {
       <span sx={{ flex: 1 }} />
 
       <Button
+        variant="secondaryTransparent"
         onClick={newArchive}
         sx={{ ...buttonStyling, marginBottom: '20px' }}
       >
-        New Archive
+        Create empty archive
       </Button>
 
       <Button
-        onClick={openArchive}
+        variant="secondaryTransparent"
+        onClick={openDanapack}
         sx={{
           ...buttonStyling,
           backgroundColor: 'white',
           color: '#001FCD'
         }}
       >
-        Load archive
+        Create archive from Danapack
       </Button>
 
       <span sx={{ flex: 1 }} />

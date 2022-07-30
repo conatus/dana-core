@@ -1,11 +1,16 @@
 import { mapValues } from 'lodash';
-import { getExtension } from 'mime';
 import { ok } from '../../common/util/error';
 import { AssetService } from '../asset/asset.service';
 import { CollectionService } from '../asset/collection.service';
+import { PageRangeAll } from '../entry/lib';
 import { MediaFileService } from '../media/media-file.service';
 import { ArchivePackage } from '../package/archive-package';
-import { saveDanapack, SaveDanapackOpts } from './danapack';
+import {
+  MetadataFileSchema,
+  MetadataRecordSchema,
+  saveDanapack,
+  SaveDanapackOpts
+} from './danapack';
 
 export class AssetExportService {
   constructor(
@@ -25,23 +30,73 @@ export class AssetExportService {
       { offset: 0, limit: Infinity }
     );
 
+    const metadata: MetadataFileSchema = {
+      collection: collectionId,
+      assets: {}
+    };
     const output: SaveDanapackOpts = {
       filepath: outpath,
-      collection: collectionId,
-      records: {}
+      metadataFiles: [metadata],
+      manifest: {
+        archiveId: archive.id,
+        collections: await this.collectionService
+          .allCollections(archive, PageRangeAll)
+          .then((x) => x.items)
+      }
     };
 
     for (const asset of items) {
-      output.records[asset.id] = {
+      metadata.assets[asset.id] = {
         metadata: mapValues(asset.metadata, (md) => md.rawValue),
-        files: Object.fromEntries(
-          asset.media.map((media) => [
-            media.id + '.' + getExtension(media.mimeType),
-            this.mediaService.getMediaPath(archive, media)
-          ])
+        files: asset.media.map((media) =>
+          this.mediaService.getMediaPath(archive, media)
         )
       };
     }
+
+    await saveDanapack(output);
+    return ok();
+  }
+
+  async exportEntireArchive(archive: ArchivePackage, outpath: string) {
+    const collections = await this.collectionService
+      .allCollections(archive, PageRangeAll)
+      .then((x) => x.items);
+    const metadata: MetadataFileSchema[] = [];
+
+    for (const collection of collections) {
+      const { items } = await this.assetService.listAssets(
+        archive,
+        collection.id,
+        { offset: 0, limit: Infinity }
+      );
+
+      const exports = items.map((asset): [string, MetadataRecordSchema] => [
+        asset.id,
+        {
+          metadata: mapValues(asset.metadata, (md) => md.rawValue),
+          accessControl: asset.accessControl,
+          redactedProperties: asset.redactedProperties,
+          files: asset.media.map((media) =>
+            this.mediaService.getMediaPath(archive, media)
+          )
+        }
+      ]);
+
+      metadata.push({
+        assets: Object.fromEntries(exports),
+        collection: collection.id
+      });
+    }
+
+    const output: SaveDanapackOpts = {
+      filepath: outpath,
+      metadataFiles: metadata,
+      manifest: {
+        archiveId: archive.id,
+        collections
+      }
+    };
 
     await saveDanapack(output);
     return ok();

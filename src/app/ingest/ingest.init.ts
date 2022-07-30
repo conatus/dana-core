@@ -3,6 +3,7 @@ import { extname } from 'path';
 import {
   CancelIngestSession,
   CommitIngestSession,
+  ExportAll,
   ExportCollection,
   GetIngestSession,
   ListIngestAssets,
@@ -21,6 +22,7 @@ import { MediaFileService } from '../media/media-file.service';
 import { ArchiveService } from '../package/archive.service';
 import { AssetExportService } from './asset-export.service';
 import { AssetIngestService } from './asset-ingest.service';
+import { BooststrapService } from './bootstrap.service';
 
 /**
  * Starts the ingest-related application services and binds them to the frontend.
@@ -44,6 +46,12 @@ export async function initIngest(
     collectionService,
     assetService,
     mediaService
+  );
+
+  const bootstrap = new BooststrapService(
+    archiveService,
+    collectionService,
+    assetIngest
   );
 
   // When an archive opens, start managing its ingest operations
@@ -164,7 +172,7 @@ export async function initIngest(
   );
 
   router.bindArchiveRpc(CommitIngestSession, async (archive, { sessionId }) => {
-    await assetIngest.commitSession(archive, sessionId);
+    await assetIngest.commitSession(archive, sessionId, { danapack: true });
     return ok();
   });
 
@@ -207,7 +215,29 @@ export async function initIngest(
     return assetExport.exportCollection(archive, collectionId, outpath);
   });
 
+  router.bindArchiveRpc(ExportAll, async (archive) => {
+    const res = await dialog.showSaveDialog(
+      undefined as unknown as BrowserWindow,
+      {
+        buttonLabel: 'Export',
+        title: 'Export Collection',
+        properties: ['showOverwriteConfirmation'],
+        filters: [createFileFilter('Dana Package', ['danapack'])]
+      }
+    );
+    if (res.canceled || !res.filePath) {
+      return ok();
+    }
+
+    const outpath =
+      extname(res.filePath) === '.danapack'
+        ? res.filePath
+        : res.filePath + '.danapack';
+    return assetExport.exportEntireArchive(archive, outpath);
+  });
+
   return {
+    bootstrap,
     assetExport,
     assetIngest
   };
