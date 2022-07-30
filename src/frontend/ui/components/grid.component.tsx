@@ -319,8 +319,8 @@ function Row<T extends Resource>({
     variant: contextMenu.visible && !selected ? 'listItems.active' : undefined,
     display: 'flex',
     flexDirection: 'row',
-    bg: selected ? 'primary' : plainBg,
-    color: selected ? 'primaryContrast' : undefined,
+    bg: selected ? 'lightBlue' : plainBg,
+    color: 'black',
     position: 'relative',
     fontFamily: 'body'
   };
