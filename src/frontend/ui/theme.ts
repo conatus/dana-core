@@ -12,7 +12,7 @@ const controlHover = {
   }
 };
 
-const colors = {
+export const colors = {
   dark: '#010000',
   gray: '#D9D4D3',
   gray1: '#F5F5F5',
@@ -83,7 +83,8 @@ export const theme: Theme & { listItems?: Record<string, ThemeUIStyleObject> } =
     fontWeights: {
       body: 400,
       heading: 400,
-      display: 600
+      display: 600,
+      heavy: 800
     },
     lineHeights: {
       body: 1.5,

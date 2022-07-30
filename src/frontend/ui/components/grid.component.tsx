@@ -30,6 +30,7 @@ import { PageRange } from '../../../common/ipc.interfaces';
 import { guessTextWidth } from './grid-cell.component';
 import { ContextMenuChoice, useContextMenu } from '../hooks/menu.hooks';
 import { Draggable, DragItem } from './dnd.component';
+import { colors } from '../theme';
 
 export interface DataGridProps<T extends Resource> extends BoxProps {
   /** Data to present */
@@ -410,7 +411,7 @@ const GridWrapper = forwardRef<HTMLDivElement, HTMLAttributes<unknown>>(
                     columns.length === 1
                       ? 'none'
                       : '1px solid var(--theme-ui-colors-border)',
-                  borderBottom: '1px solid var(--theme-ui-colors-border)',
+                  borderTop: '1px solid var(--theme-ui-colors-border)',
                   textAlign: 'center'
                 }}
               >
@@ -418,7 +419,11 @@ const GridWrapper = forwardRef<HTMLDivElement, HTMLAttributes<unknown>>(
                   sx={{
                     position: 'relative',
                     top: '50%',
-                    transform: 'translateY(-50%)'
+                    transform: 'translateY(-50%)',
+                    color: 'lightGrey',
+                    fontWeight: 'heavy',
+                    fontSize: '10px',
+                    lineHeight: '14px'
                   }}
                 >
                   {col.label}
