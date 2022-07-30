@@ -270,7 +270,7 @@ export const WindowTitle: FC<{ showVersion?: boolean } & BoxProps> = ({
       sx={{
         py: 5,
         px: 4,
-        bg: 'gray1',
+        bg: 'offWhite',
         position: 'relative'
       }}
       {...props}

@@ -53,7 +53,7 @@ export const theme: Theme & { listItems?: Record<string, ThemeUIStyleObject> } =
       highlight: colors.brightBlue,
       highlightHint: polished.transparentize(0.8, colors.charcoal),
       highlightContrast: 'white',
-      background: colors.gray2,
+      background: colors.offWhite,
       foreground: 'white',
       primary: colors.black,
       primaryContrast: 'white',
