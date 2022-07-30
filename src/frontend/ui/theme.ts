@@ -25,7 +25,9 @@ export const colors = {
   brightBlue: '#001FCD',
   black: '#0A0A0A',
   lightGrey: ' #818388',
-  lightBlue: '#C5CCEF'
+  lightBlue: '#C5CCEF',
+  offWhite: '#E6EAED',
+  washedGrey: '#DCE2E7'
 };
 
 const scaleGet = <T>(scale: Scale<T> | undefined, key: string | number) =>
