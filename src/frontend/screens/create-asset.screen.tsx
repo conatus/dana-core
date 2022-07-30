@@ -58,8 +58,7 @@ export const CreateAssetScreen = () => {
       <WindowDragArea
         sx={{
           p: 4,
-          borderBottom: 'primary',
-          bg: 'gray1'
+          borderBottom: 'primary'
         }}
       >
         <Text

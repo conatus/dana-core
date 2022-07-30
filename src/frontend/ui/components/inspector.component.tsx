@@ -110,7 +110,7 @@ export const RecordInspector: FC<RecordInspectorProps> = ({
   };
 
   return (
-    <Box sx={{ bg: 'gray1', height: '100%', overflowY: 'auto' }} {...props}>
+    <Box sx={{ height: '100%', overflowY: 'auto' }} {...props}>
       {showMedia && (
         <AssetFilesList
           onAddFile={editMedia ? handleAddFile : undefined}
@@ -178,8 +178,7 @@ export const MetadataInspector: FC<MetadataInspectorProps> = ({
           py: 3,
           flexDirection: 'row',
           alignItems: 'baseline',
-          justifyContent: 'space-between',
-          bg: 'gray1'
+          justifyContent: 'space-between'
         }}
       >
         <Label
@@ -291,7 +290,6 @@ export const MetadataInspector: FC<MetadataInspectorProps> = ({
             flexDirection: 'row',
             position: 'sticky',
             bottom: 0,
-            bg: 'gray1',
             p: 4,
             borderTop: 'light'
           }}
@@ -326,7 +324,6 @@ export const AssetFilesList: FC<MediaFileListProps> = ({
     <Box {...props}>
       <Flex
         sx={{
-          bg: 'gray1',
           p: 4,
           py: 3,
           flexDirection: 'row',
