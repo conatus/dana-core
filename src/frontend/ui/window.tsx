@@ -1,7 +1,8 @@
 /** @jsxImportSource theme-ui */
 
 import { FC, HTMLAttributes, useCallback, useEffect, useState } from 'react';
-import { BoxProps, Text } from 'theme-ui';
+import { ThreeDots } from 'react-bootstrap-icons';
+import { BoxProps, Button, Flex, Text } from 'theme-ui';
 import { FrontendPlatform } from '../../common/frontend-config';
 import {
   MaximizationState,
@@ -275,16 +276,27 @@ export const WindowTitle: FC<{ showVersion?: boolean } & BoxProps> = ({
       }}
       {...props}
     >
-      <Text
-        sx={{
-          fontWeight: 800,
-          fontFamily: 'body',
-          fontSize: '18px',
-          lineHeight: '25px'
-        }}
-      >
-        {children || title}
-      </Text>
+      <Flex sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
+        <Text
+          sx={{
+            fontWeight: 800,
+            fontFamily: 'body',
+            fontSize: '18px',
+            lineHeight: '25px'
+          }}
+        >
+          {children || title}
+        </Text>
+        <Button
+          sx={{
+            display: 'flex',
+            alignItems: 'center'
+          }}
+        >
+          <ThreeDots /> Options
+        </Button>
+      </Flex>
+
       {showVersion && (
         <Text
           sx={{
