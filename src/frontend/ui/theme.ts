@@ -24,7 +24,8 @@ const colors = {
   blue: '#28108A',
   brightBlue: '#001FCD',
   black: '#0A0A0A',
-  lightGrey: ' #818388'
+  lightGrey: ' #818388',
+  lightBlue: '#C5CCEF'
 };
 
 const scaleGet = <T>(scale: Scale<T> | undefined, key: string | number) =>
