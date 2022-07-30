@@ -333,7 +333,19 @@ export const AssetFilesList: FC<MediaFileListProps> = ({
           borderTop: 'light'
         }}
       >
-        <Label sx={{ width: 'auto', pt: 1 }}>Media Files</Label>
+        <Label
+          sx={{
+            width: 'auto',
+            pt: 1,
+            fontWeight: 'heavy',
+            textTransform: 'uppercase',
+            color: 'lightGrey',
+            fontSize: '10px',
+            lineHeight: '14px'
+          }}
+        >
+          Media Files
+        </Label>
 
         {onAddFile && (
           <Button
