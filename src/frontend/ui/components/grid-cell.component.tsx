@@ -24,12 +24,12 @@ export const MetadataItemCell: DataGridCell<{
   return (
     <div
       sx={{
-        p: '2px',
-        border: redacted ? '1px solid black' : 'none',
         '&:hover > .show-hover': { opacity: 1 }
       }}
     >
-      <span>{presentationValue(value?.metadata)}</span>
+      <span sx={{ border: redacted ? '1px solid black' : 'none', p: '2px' }}>
+        {presentationValue(value?.metadata)}
+      </span>
       {redactedProps && (
         <button
           onClick={() =>
