@@ -215,13 +215,6 @@ export const MetadataInspector: FC<MetadataInspectorProps> = ({
           '> :not(:last-child)': { mb: 5 }
         }}
       >
-        {!hideRecordId && (
-          <Box>
-            <Label>Record ID</Label>
-            <Text sx={{ userSelect: 'all' }}>{asset.id}</Text>
-          </Box>
-        )}
-
         <Box>
           <Label>Access Control</Label>
 
@@ -266,6 +259,13 @@ export const MetadataInspector: FC<MetadataInspectorProps> = ({
             )}
           </Box>
         ))}
+
+        {!hideRecordId && (
+          <Box>
+            <Label>Record ID</Label>
+            <Text sx={{ userSelect: 'all' }}>{asset.id}</Text>
+          </Box>
+        )}
       </Box>
 
       {isEditing && onCommitEdits && (
