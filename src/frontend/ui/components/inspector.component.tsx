@@ -359,25 +359,33 @@ export const AssetFilesList: FC<MediaFileListProps> = ({
           key={file.id}
         >
           <Image key={file.rendition} src={file.rendition} />
-          <Box
+          <Flex
             sx={{
-              flex: 1,
-              pl: 3,
-              fontSize: 1
+              flexDirection: 'row',
+              paddingTop: '10px',
+              alignItems: 'center'
             }}
           >
-            <div sx={{ pb: 2 }}>{fileType(file.mimeType)}</div>
-            <div>{megabytes(file.fileSize)}MB</div>
-          </Box>
-
-          {onDeleteFile && (
-            <IconButton
-              onClick={() => onDeleteFile(file)}
-              sx={{ width: 18, height: 18, p: 0 }}
+            <Text
+              sx={{
+                flex: 1,
+                flexDirection: 'row',
+                fontSize: '10px'
+              }}
             >
-              <X size={18} />
-            </IconButton>
-          )}
+              {fileType(file.mimeType)}
+            </Text>
+
+            <Text sx={{ fontSize: '10px' }}>{megabytes(file.fileSize)}MB</Text>
+            {onDeleteFile && (
+              <IconButton
+                onClick={() => onDeleteFile(file)}
+                sx={{ width: 18, height: 18, p: 0 }}
+              >
+                <X size={18} />
+              </IconButton>
+            )}
+          </Flex>
         </Flex>
       ))}
     </Box>
