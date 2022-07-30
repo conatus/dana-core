@@ -345,7 +345,6 @@ export const BottomBar: FC<BottomBarProps> = ({
   <Flex
     sx={{
       padding: 4,
-      bg: 'gray1',
       borderTop: 'primary',
       flexDirection: 'row',
       justifyContent: 'flex-end',
