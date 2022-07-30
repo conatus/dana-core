@@ -72,8 +72,6 @@ export function DataGrid<T extends Resource>({
   const fontSize = Number(theme.fontSizes?.[fontSizeParam]) ?? 13;
   const rowHeight = 45;
 
-  console.log(`Row height set to ${rowHeight}`);
-
   const dataVal = useMemo(
     (): CellData<T> => ({ cursor: data, columns }),
     [data, columns]
