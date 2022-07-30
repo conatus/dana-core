@@ -287,7 +287,7 @@ export const WindowTitle: FC<{ showVersion?: boolean } & BoxProps> = ({
         >
           {children || title}
         </Text>
-        <Button
+        {/* <Button
           sx={{
             display: 'flex',
             alignItems: 'center',
@@ -298,7 +298,7 @@ export const WindowTitle: FC<{ showVersion?: boolean } & BoxProps> = ({
           }}
         >
           <ThreeDots /> Options
-        </Button>
+        </Button> */}
       </Flex>
 
       {showVersion && (
