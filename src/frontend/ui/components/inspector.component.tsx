@@ -182,7 +182,19 @@ export const MetadataInspector: FC<MetadataInspectorProps> = ({
           bg: 'gray1'
         }}
       >
-        <Label sx={{ width: 'auto', pt: 1 }}>Metadata</Label>
+        <Label
+          sx={{
+            width: 'auto',
+            pt: 1,
+            fontWeight: 'heavy',
+            textTransform: 'uppercase',
+            color: 'lightGrey',
+            fontSize: '10px',
+            lineHeight: '14px'
+          }}
+        >
+          Schematised Metadata
+        </Label>
 
         {onStartEditing && !isEditing && (
           <Button
