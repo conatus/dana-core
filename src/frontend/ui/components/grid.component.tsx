@@ -349,7 +349,9 @@ function Row<T extends Resource>({
             textOverflow: 'ellipsis',
             '&:not:first-of-type': {
               borderLeft: '1px solid var(--theme-ui-colors-border)'
-            }
+            },
+            display: 'flex',
+            alignItems: 'center'
           }}
           style={{ width: columnSizes.length === 1 ? width : columnSizes[i] }}
         >
