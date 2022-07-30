@@ -362,8 +362,6 @@ export const AssetFilesList: FC<MediaFileListProps> = ({
       {asset.media.map((file) => (
         <Flex
           sx={{
-            '&:last-child': { borderBottom: 'light' },
-            borderTop: 'light',
             flexDirection: 'column',
             p: 4,
             bg: 'background'
